@@ -13,6 +13,12 @@ import type { ProductBrief } from "@/lib/types";
 import { getBoard } from "./boards";
 import { nimbleForBoard, loadNimbleSignals } from "./nimble";
 import { recordAgentMessage, recordApproval } from "./insforge";
+import {
+  BandConfigurationError,
+  publishBandDecision,
+  publishBandRoom,
+  type BandLiveRoom,
+} from "./band-client";
 
 export type BandAgent =
   | "Market Research Agent"
@@ -37,6 +43,11 @@ export interface BandRoom {
   status: RoomStatus;
   messages: BandMessage[];
   context: BandContext;
+  integration: {
+    mode: "live" | "fallback";
+    remoteRoomId?: string;
+    warning?: string;
+  };
 }
 
 export interface BandContext {
@@ -49,6 +60,7 @@ export interface BandContext {
 }
 
 const rooms = new Map<string, BandRoom>();
+const liveRooms = new Map<string, BandLiveRoom>();
 let roomSeq = 0;
 
 export function getRoom(roomId: string): BandRoom | undefined {
@@ -59,7 +71,16 @@ export function listRooms(): BandRoom[] {
   return [...rooms.values()];
 }
 
-export function startRoom(context: BandContext): BandRoom {
+function integrationWarning(error: unknown): string {
+  if (error instanceof BandConfigurationError) {
+    return `Live Band disabled. Add ${error.missing.join(", ")} to app/.env.local.`;
+  }
+  return error instanceof Error
+    ? `${error.message}. Showing the local fallback discussion.`
+    : "Band is unavailable. Showing the local fallback discussion.";
+}
+
+export async function startRoom(context: BandContext): Promise<BandRoom> {
   const roomId = `room-${++roomSeq}-${Date.now().toString(36)}`;
   const messages: BandMessage[] = [];
   const post = (agent: BandAgent, role: string, message: string, action?: string) => {
@@ -148,8 +169,23 @@ export function startRoom(context: BandContext): BandRoom {
     "request_approval"
   );
 
-  const room: BandRoom = { roomId, status: "awaiting_approval", messages, context };
+  const room: BandRoom = {
+    roomId,
+    status: "awaiting_approval",
+    messages,
+    context,
+    integration: { mode: "fallback" },
+  };
   rooms.set(roomId, room);
+
+  try {
+    const liveRoom = await publishBandRoom(context.brief.productName, messages);
+    liveRooms.set(roomId, liveRoom);
+    room.integration = { mode: "live", remoteRoomId: liveRoom.roomId };
+  } catch (error) {
+    room.integration = { mode: "fallback", warning: integrationWarning(error) };
+  }
+
   return room;
 }
 
@@ -171,6 +207,19 @@ export async function decideRoom(
   };
   room.messages.push(msg);
   await recordApproval({ roomId, decision, decidedBy, context: { note } });
+
+  const liveRoom = liveRooms.get(roomId);
+  if (liveRoom) {
+    try {
+      await publishBandDecision(liveRoom, decision, decidedBy, note);
+    } catch (error) {
+      room.integration.warning =
+        error instanceof Error
+          ? `${error.message}. The decision is saved locally but was not mirrored to Band.`
+          : "The decision is saved locally but was not mirrored to Band.";
+    }
+  }
+
   return room;
 }
 

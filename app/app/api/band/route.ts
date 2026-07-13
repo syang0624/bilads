@@ -47,7 +47,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!body.context?.brief?.productName) {
       return NextResponse.json({ error: "context.brief.productName is required" }, { status: 400 });
     }
-    return NextResponse.json(startRoom(body.context));
+    return NextResponse.json(await startRoom(body.context));
   }
 
   if (body.action === "approve" || body.action === "reject") {

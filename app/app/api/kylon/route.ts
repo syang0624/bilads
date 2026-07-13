@@ -118,7 +118,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       next.startedAt = now;
       // The approval assignment hands off to a BAND room.
       if (next.id === "kylon-5") {
-        const room = startRoom({
+        const room = await startRoom({
           brief: {
             productName: "Volt",
             description: "Premium electric commuter bike.",
