@@ -8,39 +8,38 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 ## Phase 0: Setup (0:00-0:15)
 
-- [ ] Scaffold Next.js: `npx create-next-app@latest bilads --typescript --tailwind --app`
-- [ ] Install deps: `leaflet react-leaflet leaflet.heat perspective-transform openai`
-- [ ] Commit `types.ts` from repo root — this is the shared contract
-- [ ] Add Google Fonts to `app/layout.tsx`: Space Grotesk (display) + JetBrains Mono (mono)
-- [ ] Extend Tailwind theme with palette tokens: `bg: #0B0B0B`, `fg: #F5F1E8`, `accent: #F5D400`, `surface: #2A2A2A`
+- [x] Scaffold Next.js: `npx create-next-app@latest bilads --typescript --tailwind --app`
+- [x] Install deps: `leaflet react-leaflet leaflet.heat perspective-transform openai recharts`
+- [x] Copy `types.ts` into `app/lib/types.ts` — shared contract
+- [x] Add Google Fonts to `app/layout.tsx`: Space Grotesk (display) + JetBrains Mono (mono)
+- [x] Extend Tailwind theme with palette tokens: `bg: #0B0B0B`, `fg: #F5F1E8`, `accent: #F5D400`, `surface: #2A2A2A`
 
 ---
 
 ## Phase 1: Landing Page (0:15-1:00)
 
-- [ ] `app/page.tsx`: `BILADS` wordmark at hero size, tagline "Billboards, decided." underneath
-- [ ] Upload form component:
+- [x] `app/page.tsx`: `BILADS` wordmark at hero size, tagline "Billboards, decided." underneath
+- [x] Upload form component:
   - Image drop zone (accepts product image, previews it)
   - Text inputs: name, description, target audience
   - Weekly budget ($) input
   - Campaign duration (weeks, default 4)
   - Awareness <-> Targeted slider (0-1, default 0.5)
-- [ ] "Deploy agent team" CTA button in accent yellow
-- [ ] Three sample product cards row below the form — reads from `data/samples.ts` (Volt, Fog City Coffee, Ledgerly)
+- [x] "Deploy agent team" CTA button in accent yellow
+- [x] Three sample product cards row below the form — reads from `lib/samples.ts` (Volt, Fog City Coffee, Ledgerly)
   - One click prefills entire form + previews product image
-  - Scrolls to CTA after prefill
-- [ ] Build `<AgentCard name status findings />` component — used 3x on results screen; build against mocks now
+- [x] Build `<AgentCard name status findings />` component — used 3x on results screen
 
 ---
 
 ## Phase 2: Agent Theater (1:00-2:00)
 
-- [ ] `app/results/page.tsx` shell — on mount, POST to `/api/research` with form state
-- [ ] Sequential card activation:
-  - Card 1 (Researcher) goes "active" immediately, typewriter-reveals 4 findings (~120ms/char)
-  - Card 2 (Media Buyer) activates after Card 1 finishes, typewriter-reveals its 4 findings
+- [x] `app/results/page.tsx` shell — on mount, POST to `/api/research` with form state
+- [x] Sequential card activation:
+  - Card 1 (Researcher) goes "active" immediately, typewriter-reveals 4 findings (~25ms/char)
+  - Card 2 (Media Buyer) activates after Card 1 finishes (4s delay), typewriter-reveals its 4 findings
   - Card 3 (Creative Director) stays "waiting" until a board is opened
-- [ ] Silent handoffs: Card 1 dims to "complete" state, Card 2 lights up. No cross-agent chatter.
+- [x] Silent handoffs: Card 1 dims to "complete" state, Card 2 lights up. No cross-agent chatter.
 
 ### Sponsor: BAND Collaboration View
 
@@ -58,16 +57,16 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 ## Phase 3: Results Page — Map + Info Cards (1:00-2:00)
 
-- [ ] Fullscreen `react-leaflet` map centered on SF with OSM tiles
-- [ ] `leaflet.heat` layer (off by default, toggleable)
-- [ ] Pin component for top-3 boards from `mediaBuyer.top3` — each pin shows rank number in yellow badge
-- [ ] Sticky top bar: budget input + awareness slider + duration input, all bound to state
-  - Changing any value re-filters `mediaBuyer.rankings` client-side (recompute `valueScore` with new `w` per PRD §5)
-  - Re-drops pins with smooth transition — **this is the demo slider moment**
-- [ ] Click pin -> floating info card over the map:
+- [x] Fullscreen `react-leaflet` map centered on SF with dark CartoDB tiles
+- [ ] `leaflet.heat` layer (off by default, toggleable) — installed but not yet wired
+- [x] Pin component for top-3 boards from `mediaBuyer.top3` — each pin shows rank number in yellow badge
+- [x] Sticky top bar: budget input + awareness slider + duration input, all bound to state
+  - Changing any value re-filters `mediaBuyer.rankings` client-side (recompute `valueScore` with corrected formula)
+  - Re-drops pins — **this is the demo slider moment**
+- [x] Click pin -> floating info card over the map:
   - Rank badge, name, weekly cost, `demoMatch %`, Media Buyer `reason`
   - "Design ads" button
-- [ ] Empty state: if no boards in budget, full-screen message: "Your $X budget doesn't cover any boards. Raise to $Y to unlock 3 options." with nudge slider
+- [x] Empty state: if no boards in budget, full-screen message with raise-to amount
 
 ### Sponsor: Location Scoring Panel (from SPONSORS.md)
 
@@ -80,16 +79,16 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 ## Phase 4: Creative Panel (2:00-3:00)
 
-- [ ] On "Design ads" click, slide-in panel (or full-page) over the map
-- [ ] POST to `/api/generate` with `{billboardId, brief, audienceProfile, consistentBrand, variant: 0}`
-- [ ] Two concept cards side-by-side:
-  - Real billboard photo with generated ad perspective-warped onto the board using `perspective-transform` (compute `matrix3d` from `adCorners`, apply as CSS transform)
-  - Headline + subline overlaid in display font
+- [x] On "Design ads" click, full-page overlay panel over the map
+- [x] POST to `/api/generate` with `{billboardId, brief, audienceProfile, consistentBrand, variant: 0}`
+- [x] Two concept cards side-by-side:
+  - Generated ad image with headline + subline overlaid in display font
   - Language badge (EN/ES) top-right
-- [ ] Per-card "Regenerate" button -> same endpoint with `variant++` (local counter)
-- [ ] "Consistent brand" toggle at panel top — re-fires generate for both concepts when flipped
-- [ ] "Back to map" button
-- [ ] **Mission board shows English + Spanish** — call this out on stage
+- [ ] **Perspective warp**: real billboard photo with generated ad warped onto the board using `perspective-transform` + `adCorners` — currently showing flat image, needs composite
+- [x] Per-card "Regenerate" button -> same endpoint with `variant++` (local counter)
+- [x] "Consistent brand" toggle at panel top — re-fires generate when flipped
+- [x] "Back to map" button
+- [x] **Mission board shows English + Spanish** — `spanishFriendly` flag drives EN/ES concept split
 
 ### Sponsor: GMI Cloud Attribution
 
@@ -100,11 +99,11 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 ## Phase 5: Simulation (3:00-3:30)
 
-- [ ] "Simulate campaign" button in creative panel
-- [ ] Day-by-day animated time-series chart (SVG or recharts area chart):
-  - Draws daily impressions + target-demo reach, ~80ms/day (whole animation ~2.2s for 28 days)
-- [ ] Count-up animations below chart: total impressions, total spend, blended CPM, est. CPA
-- [ ] Assumptions listed in mono footer text
+- [x] "Simulate campaign" button in creative panel
+- [x] Day-by-day animated SVG time-series chart:
+  - Draws cumulative impressions (yellow) + target reach (green) day by day, ~80ms/day
+- [x] Stats below chart: total impressions, total spend, blended CPM, est. CPA
+- [x] Assumptions listed in mono footer text
 
 ### Sponsor: Three-Scenario View (from SPONSORS.md)
 
@@ -156,6 +155,24 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
   - Call out the Mission bilingual moment
   - Live regenerate as the closer
   - "Billboards, decided." — land it at the end
+
+---
+
+## What's Built (files)
+
+| File | What it does |
+|---|---|
+| `app/app/layout.tsx` | Root layout with Space Grotesk + JetBrains Mono, dark theme |
+| `app/app/globals.css` | Tailwind config with bilads color tokens |
+| `app/app/page.tsx` | Landing page: wordmark, form, samples, CTA |
+| `app/app/results/page.tsx` | Results: agent theater, map, info cards, creative panel, simulation |
+| `app/app/results/MapView.tsx` | Leaflet map with dark tiles, ranked pins, auto-fit bounds |
+| `app/app/api/research/route.ts` | Mock research endpoint with deterministic Jaccard scoring |
+| `app/app/api/generate/route.ts` | Mock generate endpoint with EN/ES concept templates |
+| `app/app/api/placeholder/route.ts` | SVG placeholder image generator |
+| `app/lib/types.ts` | Shared TypeScript contracts (copied from repo root) |
+| `app/lib/samples.ts` | 3 sample product briefs |
+| `app/lib/billboards.json` | 14 curated SF billboard records |
 
 ---
 
