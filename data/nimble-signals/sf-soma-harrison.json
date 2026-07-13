@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-soma-harrison",
+  "location": "Harrison St @ 8th (SoMa)",
+  "signals": [
+    "47 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Software company (23), Corporate office (23), Website designer (5), Internet marketing service (4)",
+    "33 rated venues nearby, avg rating 4.3/5",
+    "Audience fit: SoMa — tech, fitness, young professionals"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 47
+}

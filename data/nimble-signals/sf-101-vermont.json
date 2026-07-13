@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-101-vermont",
+  "location": "US-101 N @ Vermont St (SoMa)",
+  "signals": [
+    "36 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Software company (15), Corporate office (13), Furniture maker (4), Business management consultant (4)",
+    "25 rated venues nearby, avg rating 4.3/5",
+    "Audience fit: SoMa — commuters, tech, young professionals"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 36
+}

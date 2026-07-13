@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-market-downtown",
+  "location": "Market St @ Powell (Downtown)",
+  "signals": [
+    "50 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Software company (22), Corporate office (12), Business management consultant (8), Marketing agency (6)",
+    "29 rated venues nearby, avg rating 4.6/5",
+    "Audience fit: Downtown — office workers, tech, professionals"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 50
+}
