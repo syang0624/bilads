@@ -5,6 +5,7 @@
 //
 // Run: node scripts/validate-data.mjs
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -34,7 +35,7 @@ const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const isStr = (v) => typeof v === "string" && v.length > 0;
 
 // =============================================================================
-console.log("\n[1/5] Billboard schema (types.ts §7.4)");
+console.log("\n[1/6] Billboard schema (types.ts §7.4)");
 // =============================================================================
 if (!Array.isArray(boards)) fail("billboards.json is not an array");
 if (boards.length < 12 || boards.length > 15)
@@ -86,7 +87,7 @@ for (const b of boards) {
 if (errors === 0) console.log(`  ✓ all ${boards.length} boards conform to the contract`);
 
 // =============================================================================
-console.log("\n[2/5] audienceTags vocabulary (GODSON.md §Phase 3)");
+console.log("\n[2/6] audienceTags vocabulary (GODSON.md §Phase 3)");
 // =============================================================================
 let tagErr = 0;
 for (const b of boards)
@@ -95,7 +96,7 @@ for (const b of boards)
 if (tagErr === 0) console.log("  ✓ every audienceTag draws from the vocabulary");
 
 // =============================================================================
-console.log("\n[3/5] Traffic heatmap (§7.6)");
+console.log("\n[3/6] Traffic heatmap (§7.6)");
 // =============================================================================
 if (heatmap.length < 200 || heatmap.length > 400)
   warn(`expected 200-400 points, found ${heatmap.length}`);
@@ -109,7 +110,7 @@ if (badPts.length) fail(`${badPts.length} heatmap points malformed or out of bou
 else console.log("  ✓ all points are [lat, lng, intensity] within SF bounds, intensity 0..1");
 
 // =============================================================================
-console.log("\n[4/5] demoMatch winners (GODSON.md §Phase 1, intended formula)");
+console.log("\n[4/6] demoMatch winners (GODSON.md §Phase 1, intended formula)");
 // =============================================================================
 // Intended formula per the contract flag: w=1 => pure awareness (raw impressions).
 const jaccard = (a, b) => {
@@ -161,7 +162,7 @@ if (!sunsetInVolt) console.log("  ✓ Sunset stays out of Volt's top 3 (delibera
 else fail("Sunset appeared in Volt's top 3 — should be low-fit");
 
 // =============================================================================
-console.log("\n[5/5] Provenance cross-check (billboards.provenance.json)");
+console.log("\n[5/6] Provenance cross-check (billboards.provenance.json)");
 // =============================================================================
 try {
   const prov = JSON.parse(readFileSync(join(DATA, "billboards.provenance.json"), "utf8"));
@@ -170,6 +171,16 @@ try {
     if (!provIds.has(b.id)) warn(`[${b.id}] has no provenance entry`);
   if (provIds.size === boards.length) console.log("  ✓ every board has a provenance record");
 } catch { warn("billboards.provenance.json missing or unreadable"); }
+
+// =============================================================================
+console.log("\n[6/6] Frontend data sync (app/lib mirrors canonical sources)");
+// =============================================================================
+try {
+  execFileSync("node", [join(__dirname, "sync-frontend-data.mjs"), "--check"], { stdio: "pipe" });
+  console.log("  ✓ app/lib is in sync with canonical data/contract files");
+} catch {
+  fail("app/lib is stale vs canonical sources — run: node scripts/sync-frontend-data.mjs");
+}
 
 // =============================================================================
 console.log(`\n${errors ? "✗" : "✓"} validation ${errors ? "FAILED" : "passed"} — ${errors} error(s), ${warnings} warning(s)\n`);
