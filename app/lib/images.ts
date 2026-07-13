@@ -29,18 +29,23 @@ export async function generateAdImage(
   prompt: string,
   cacheKey: string,
   index: number,
-  placeholderText: string
+  placeholderText: string,
+  forceRegenerate = false
 ): Promise<string> {
   const filename = `${cacheKey}-${index}.png`;
   const urlPath = `/generated/${filename}`;
   const diskPath = join(generatedDir(), filename);
-  if (existsSync(diskPath)) return urlPath;
+  if (!forceRegenerate && existsSync(diskPath)) return urlPath;
   try {
     const bytes = await image(prompt);
     mkdirSync(generatedDir(), { recursive: true });
     writeFileSync(diskPath, bytes);
     return urlPath;
-  } catch {
+  } catch (error) {
+    console.warn(
+      `Image generation failed for ${filename}; returning a placeholder:`,
+      error instanceof Error ? error.message : String(error)
+    );
     return placeholderUrl(placeholderText);
   }
 }
