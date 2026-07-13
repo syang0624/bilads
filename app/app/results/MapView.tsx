@@ -96,7 +96,9 @@ export default function MapView({
   const [showHeatmap, setShowHeatmap] = useState(false);
 
   return (
-    <div className="w-full h-full relative">
+    // z-0 opens a stacking context so Leaflet's internal panes (z-index
+    // 400-700) can't paint over sibling overlays like the floating info card.
+    <div className="w-full h-full relative z-0">
       <MapContainer
         center={[37.775, -122.418]}
         zoom={13}
