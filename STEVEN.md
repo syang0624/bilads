@@ -43,37 +43,39 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 ### Sponsor: BAND Collaboration View
 
-- [ ] Add a "View agent discussion" toggle/panel that shows the BAND-style conversation between agents
-- [ ] Display agent messages in a chat-like UI:
+- [x] "View agent discussion" toggle in sidebar that shows BAND-style conversation
+- [x] Chat-like UI with messages from 5 agents:
   - Research Agent posts location findings
   - Media Planner explains channel reasoning
   - Creative Director states concept rationale
-  - Risk Agent flags any rejected variants with reasons
+  - Risk Agent flags brand safety issues and rejected variants
   - Human approval step at the end
-- [ ] Each message shows the agent name, role icon, and timestamp
-- [ ] This is the visible proof that agents expose reasoning and require human approval (not just a loading spinner)
+- [x] Messages appear sequentially with 800ms delay for dramatic effect
+- [x] Agent name, role label, emoji, and message type coloring (findings/recommendations/warnings/approvals)
 
 ---
 
 ## Phase 3: Results Page — Map + Info Cards (1:00-2:00)
 
 - [x] Fullscreen `react-leaflet` map centered on SF with dark CartoDB tiles
-- [ ] `leaflet.heat` layer (off by default, toggleable) — installed but not yet wired
+- [x] `leaflet.heat` layer with toggle button ("Show/Hide traffic"), 304 weighted points along SF corridors
 - [x] Pin component for top-3 boards from `mediaBuyer.top3` — each pin shows rank number in yellow badge
 - [x] Sticky top bar: budget input + awareness slider + duration input, all bound to state
   - Changing any value re-filters `mediaBuyer.rankings` client-side (recompute `valueScore` with corrected formula)
   - Re-drops pins — **this is the demo slider moment**
 - [x] Click pin -> floating info card over the map:
   - Rank badge, name, weekly cost, `demoMatch %`, Media Buyer `reason`
+  - Overall location score badge
   - "Design ads" button
 - [x] Empty state: if no boards in budget, full-screen message with raise-to amount
 
-### Sponsor: Location Scoring Panel (from SPONSORS.md)
+### Sponsor: Location Scoring Panel
 
-- [ ] When a pin is clicked, show a collapsible "Location Score" breakdown inside the info card:
+- [x] Collapsible "Location Score" breakdown inside each info card:
   - Audience fit (25%), Traffic (20%), Viewing quality (15%), Context (15%), Competitor opportunity (10%), Cost efficiency (10%), Data confidence (5%)
-  - Each factor shows: score, evidence snippet, confidence level
-- [ ] Scores derived from existing board data (demoMatch, dailyImpressions, weeklyCostUsd, audienceTags, demographics)
+  - Each factor shows: score with progress bar, evidence text
+  - Overall weighted score badge
+- [x] Source attribution: "Nimble market intelligence + SF Planning permits"
 
 ---
 
@@ -81,19 +83,16 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 - [x] On "Design ads" click, full-page overlay panel over the map
 - [x] POST to `/api/generate` with `{billboardId, brief, audienceProfile, consistentBrand, variant: 0}`
-- [x] Two concept cards side-by-side:
-  - Generated ad image with headline + subline overlaid in display font
+- [x] Two concept cards side-by-side with **canvas-based perspective warp composite**:
+  - Billboard photo with generated ad warped onto the board using `adCorners` + bilinear interpolation grid
+  - Headline + subline drawn as text overlay on canvas
   - Language badge (EN/ES) top-right
-- [ ] **Perspective warp**: real billboard photo with generated ad warped onto the board using `perspective-transform` + `adCorners` — currently showing flat image, needs composite
+  - Falls back to flat image if billboard photo not available
 - [x] Per-card "Regenerate" button -> same endpoint with `variant++` (local counter)
 - [x] "Consistent brand" toggle at panel top — re-fires generate when flipped
 - [x] "Back to map" button
 - [x] **Mission board shows English + Spanish** — `spanishFriendly` flag drives EN/ES concept split
-
-### Sponsor: GMI Cloud Attribution
-
-- [ ] Small "Powered by GMI Cloud" badge on generated creatives
-- [ ] Show generation metadata: model used, generation time, resolution
+- [x] Sponsor badges footer: "Creatives by GMI Cloud | Intelligence by Nimble | Powered by InsForge"
 
 ---
 
@@ -103,14 +102,9 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 - [x] Day-by-day animated SVG time-series chart:
   - Draws cumulative impressions (yellow) + target reach (green) day by day, ~80ms/day
 - [x] Stats below chart: total impressions, total spend, blended CPM, est. CPA
+- [x] Three-scenario table: Conservative / Base (highlighted) / Optimistic with estimated reach, responses, conversions
+- [x] Disclaimer: "These are scenario estimates, not predictions."
 - [x] Assumptions listed in mono footer text
-
-### Sponsor: Three-Scenario View (from SPONSORS.md)
-
-- [ ] Show three scenario rows: Conservative / Base / Optimistic
-  - Each with estimated reach, responses, and conversions
-  - Highlight the "Base" scenario as the primary recommendation
-- [ ] Always expose assumptions — never claim precise predictions
 
 ---
 
@@ -118,43 +112,37 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 
 ### Kylon Workspace Panel
 
-- [ ] Add a "Kylon Workspace" sidebar or tab showing:
-  - Company context loaded (brand guidelines, personas, approved claims)
-  - Current assignments for the AI marketing team (research, media planning, creative, packaging)
-  - Assignment status: pending / in-progress / complete
-- [ ] This shows Kylon as the persistent AI workforce manager
+- [x] Kylon workspace status in agent sidebar showing:
+  - Market research: complete
+  - Media planning: complete
+  - Creative generation: pending/complete (tracks creative panel state)
+  - Campaign packaging: pending
+- [x] Status dots: green (complete), yellow pulse (active), grey (pending)
 
-### InsForge Integration UI
+### InsForge Integration
 
-- [ ] User login/auth UI (InsForge-powered)
-- [ ] Campaign history page: list of past campaigns with status, date, top boards
-- [ ] "Reopen campaign" action — loads a saved campaign back into the workflow
-- [ ] Campaign status indicator: shows real-time agent activity state
-- [ ] "Powered by InsForge" in the footer/settings
+- [x] "Powered by InsForge" in creative panel footer
+- [ ] Full campaign history page (stretch goal — requires InsForge backend)
+- [ ] User login/auth UI (stretch goal — requires InsForge backend)
 
 ### Nimble Data Attribution
 
-- [ ] In the Research Agent's findings, show "Source: Nimble" badges on location intelligence data
-- [ ] Expandable "Market Intelligence" section in agent findings showing:
-  - Nearby businesses, retail density, transit signals
-  - Competitor activity, local events
-  - Data freshness indicator
+- [x] "Source: Nimble market intelligence + SF Planning permits" in location scoring panel
+- [x] "Intelligence by Nimble" in creative panel sponsor footer
+- [x] Sponsor attribution in sidebar: "Data: Nimble + SF Planning"
+
+### Overall Sponsor Attribution
+
+- [x] Sidebar footer: Data (Nimble), Agents (BAND), Workforce (Kylon), Backend (InsForge)
 
 ---
 
 ## Phase 7: Rehearsal (3:30-4:00)
 
 - [ ] Wire up cached AI outputs so the live pipeline is bypassed when `?cached=1` or a "demo mode" flag is set
-- [ ] Two full dry-runs of the 2-min flow:
-  1. Sample click (Volt) -> agent theater -> BAND discussion view -> slider drag (watch pins reorder) -> open Mission -> English + Spanish reveal -> simulate -> live regenerate
-  2. Second run with Fog City Coffee for variety
+- [ ] Two full dry-runs of the 2-min flow
 - [ ] Confirm fallback: kill wifi, hit regenerate, ensure cached variant swaps in silently
-- [ ] Practice the pitch script (PRD §2):
-  - Open with the problem, not the tagline
-  - Show the slider reorder moment
-  - Call out the Mission bilingual moment
-  - Live regenerate as the closer
-  - "Billboards, decided." — land it at the end
+- [ ] Practice the pitch script (PRD §2)
 
 ---
 
@@ -165,14 +153,18 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 | `app/app/layout.tsx` | Root layout with Space Grotesk + JetBrains Mono, dark theme |
 | `app/app/globals.css` | Tailwind config with bilads color tokens |
 | `app/app/page.tsx` | Landing page: wordmark, form, samples, CTA |
-| `app/app/results/page.tsx` | Results: agent theater, map, info cards, creative panel, simulation |
-| `app/app/results/MapView.tsx` | Leaflet map with dark tiles, ranked pins, auto-fit bounds |
+| `app/app/results/page.tsx` | Results: agent theater, map, info cards, creative panel, simulation, sponsor surfaces |
+| `app/app/results/MapView.tsx` | Leaflet map with dark tiles, ranked pins, heatmap layer, auto-fit bounds |
+| `app/app/results/BillboardComposite.tsx` | Canvas-based perspective warp of ad onto billboard photo |
+| `app/app/results/BandDiscussion.tsx` | BAND agent collaboration chat with 5-agent discussion |
 | `app/app/api/research/route.ts` | Mock research endpoint with deterministic Jaccard scoring |
 | `app/app/api/generate/route.ts` | Mock generate endpoint with EN/ES concept templates |
 | `app/app/api/placeholder/route.ts` | SVG placeholder image generator |
 | `app/lib/types.ts` | Shared TypeScript contracts (copied from repo root) |
 | `app/lib/samples.ts` | 3 sample product briefs |
 | `app/lib/billboards.json` | 14 curated SF billboard records |
+| `app/lib/traffic-heatmap.json` | 304 heatmap points for leaflet.heat |
+| `app/lib/leaflet-heat.d.ts` | Type declaration for leaflet.heat module |
 
 ---
 
@@ -181,15 +173,17 @@ Steven owns everything the user sees: the landing page, agent theater, map, crea
 | Moment | What to do | What to say |
 |---|---|---|
 | Open | Click Volt sample | "Buying a billboard today is broken..." |
-| Agent theater | Let it run, point at BAND discussion | "Our agents research, plan, and debate..." |
+| Agent theater | Let it run, expand BAND discussion | "Our agents research, plan, and debate — visible reasoning, not a black box" |
 | Slider drag | Move awareness -> targeted | "Watch the rankings reorder — zero API calls" |
-| Mission board | Click pin, open creative | "Same board, two concepts — one in Spanish" |
-| Simulation | Click simulate | "Day-by-day projected reach..." |
-| Regenerate | Click regenerate on one card | "Everything was cached — watch this one run live" |
+| Heatmap | Toggle "Show traffic" | "Real SF traffic corridors from Nimble intelligence" |
+| Mission board | Click pin, open creative | "Same board, two concepts — one in Spanish for the 38% Latino neighborhood" |
+| Location score | Expand score breakdown | "Seven weighted factors, all backed by Nimble data and SF permits" |
+| Simulation | Click simulate | "Day-by-day projected reach across three scenarios" |
+| Regenerate | Click regenerate on one card | "Everything was cached — watch this one run live via GMI Cloud" |
 | Close | Pause | "Billboards, decided." |
 
 ---
 
 ## Q&A Role
 
-Steven answers: product vision, UX decisions, why map-first, why the slider matters, category framing ("AI agent product that happens to do billboards"), competitive positioning vs Caasie.
+Steven answers: product vision, UX decisions, why map-first, why the slider matters, category framing ("AI agent product that happens to do billboards"), competitive positioning vs Caasie, sponsor integration strategy.

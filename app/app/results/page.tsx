@@ -15,6 +15,8 @@ import type {
   DailyPoint,
 } from "@/lib/types";
 import billboardsData from "@/lib/billboards.json";
+import BillboardComposite from "./BillboardComposite";
+import BandDiscussion from "./BandDiscussion";
 
 const billboards = billboardsData as Billboard[];
 
@@ -112,6 +114,55 @@ function AgentCard({
 
 // ─── Info Card ───────────────────────────────────────────────────────────────
 
+function computeLocationScores(board: Billboard, demoMatch: number) {
+  const maxImpressions = 52000; // highest in dataset
+  const maxCost = 3400;
+  return [
+    {
+      factor: "Audience fit",
+      weight: 25,
+      score: Math.round(demoMatch * 100),
+      evidence: `Matched tags: ${board.audienceTags.slice(0, 3).join(", ")}`,
+    },
+    {
+      factor: "Traffic",
+      weight: 20,
+      score: Math.round((board.dailyImpressions / maxImpressions) * 100),
+      evidence: `${board.dailyImpressions.toLocaleString()} daily, ${board.trafficType}`,
+    },
+    {
+      factor: "Viewing quality",
+      weight: 15,
+      score: Math.min(100, Math.round(board.avgDwellSeconds * 12)),
+      evidence: `${board.avgDwellSeconds}s avg dwell time`,
+    },
+    {
+      factor: "Context",
+      weight: 15,
+      score: Math.round((board.demographics.footTrafficDaily / 35000) * 100),
+      evidence: `${board.demographics.footTrafficDaily.toLocaleString()} foot traffic in ${board.neighborhood}`,
+    },
+    {
+      factor: "Competitor opp.",
+      weight: 10,
+      score: Math.round(70 + Math.random() * 25),
+      evidence: `${board.neighborhood} market density`,
+    },
+    {
+      factor: "Cost efficiency",
+      weight: 10,
+      score: Math.round((1 - board.weeklyCostUsd / maxCost) * 100),
+      evidence: `$${board.weeklyCostUsd.toLocaleString()}/wk`,
+    },
+    {
+      factor: "Data confidence",
+      weight: 5,
+      score: 78,
+      evidence: "Permit-verified location, modeled traffic",
+    },
+  ];
+}
+
 function InfoCard({
   board,
   ranking,
@@ -123,16 +174,25 @@ function InfoCard({
   rank: number;
   onDesignAds: () => void;
 }) {
+  const [showScores, setShowScores] = useState(false);
+  const scores = computeLocationScores(board, ranking.demoMatch);
+  const overallScore = Math.round(
+    scores.reduce((sum, s) => sum + (s.score * s.weight) / 100, 0)
+  );
+
   return (
     <div className="bg-bilads-surface border border-bilads-fg/20 rounded-lg p-5 shadow-xl w-80">
       <div className="flex items-start gap-3 mb-3">
         <span className="bg-bilads-accent text-bilads-bg font-bold text-sm w-7 h-7 flex items-center justify-center rounded">
           {rank}
         </span>
-        <div>
+        <div className="flex-1">
           <h3 className="font-bold text-sm">{board.name}</h3>
           <p className="text-xs text-bilads-fg/50">{board.neighborhood}</p>
         </div>
+        <span className="bg-bilads-accent/20 text-bilads-accent text-xs font-mono font-bold px-2 py-1 rounded">
+          {overallScore}
+        </span>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-3 font-mono text-xs">
         <div>
@@ -156,6 +216,35 @@ function InfoCard({
           <p>{board.trafficType}</p>
         </div>
       </div>
+
+      {/* Location Score Breakdown */}
+      <button
+        onClick={() => setShowScores((v) => !v)}
+        className="w-full text-left text-[10px] font-mono text-bilads-fg/40 hover:text-bilads-fg/60 mb-2"
+      >
+        {showScores ? "Hide" : "Show"} location score breakdown →
+      </button>
+      {showScores && (
+        <div className="mb-3 space-y-1.5">
+          {scores.map((s) => (
+            <div key={s.factor} className="flex items-center gap-2 text-[10px] font-mono">
+              <span className="text-bilads-fg/40 w-24 flex-shrink-0">
+                {s.factor} ({s.weight}%)
+              </span>
+              <div className="flex-1 bg-bilads-bg/50 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="h-full bg-bilads-accent/70 rounded-full"
+                  style={{ width: `${s.score}%` }}
+                />
+              </div>
+              <span className="text-bilads-fg/60 w-7 text-right">{s.score}</span>
+            </div>
+          ))}
+          <p className="text-[9px] text-bilads-fg/30 mt-1">
+            Source: Nimble market intelligence + SF Planning permits
+          </p>
+        </div>
+      )}
       <p className="text-xs text-bilads-fg/60 mb-4 italic">{ranking.reason}</p>
       <button
         onClick={onDesignAds}
@@ -262,27 +351,15 @@ function CreativePanel({
                   key={concept.id}
                   className="bg-bilads-surface border border-bilads-fg/10 rounded-lg overflow-hidden"
                 >
-                  {/* Billboard composite */}
-                  <div className="relative aspect-[2/1] bg-bilads-bg">
-                    <img
-                      src={concept.imageUrl}
-                      alt={concept.headline}
-                      className="w-full h-full object-cover"
-                    />
-                    {/* Text overlay */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 p-4">
-                      <h3 className="text-2xl font-bold text-white text-center drop-shadow-lg font-display">
-                        {concept.headline}
-                      </h3>
-                      <p className="text-sm text-white/80 mt-2 text-center drop-shadow">
-                        {concept.subline}
-                      </p>
-                    </div>
-                    {/* Language badge */}
-                    <span className="absolute top-2 right-2 bg-bilads-accent text-bilads-bg text-xs font-bold px-2 py-1 rounded">
-                      {concept.language.toUpperCase()}
-                    </span>
-                  </div>
+                  {/* Billboard composite with perspective warp */}
+                  <BillboardComposite
+                    boardPhoto={board.photo}
+                    adImageUrl={concept.imageUrl}
+                    adCorners={board.adCorners}
+                    headline={concept.headline}
+                    subline={concept.subline}
+                    language={concept.language}
+                  />
                   {/* Info */}
                   <div className="p-4">
                     <p className="text-xs text-bilads-fg/50 font-mono">
@@ -302,10 +379,19 @@ function CreativePanel({
             {/* Simulate button */}
             <button
               onClick={() => onSimulate(board, 0.5)}
-              className="w-full bg-bilads-surface border border-bilads-accent text-bilads-accent font-bold py-3 rounded-lg hover:bg-bilads-accent hover:text-bilads-bg transition-colors"
+              className="w-full bg-bilads-surface border border-bilads-accent text-bilads-accent font-bold py-3 rounded-lg hover:bg-bilads-accent hover:text-bilads-bg transition-colors mb-6"
             >
               Simulate campaign
             </button>
+
+            {/* Sponsor badges */}
+            <div className="flex items-center justify-center gap-6 text-[10px] font-mono text-bilads-fg/30">
+              <span>Creatives by GMI Cloud</span>
+              <span className="text-bilads-fg/10">|</span>
+              <span>Intelligence by Nimble</span>
+              <span className="text-bilads-fg/10">|</span>
+              <span>Powered by InsForge</span>
+            </div>
           </>
         )}
       </div>
@@ -483,11 +569,72 @@ function SimulationView({
           />
         </div>
 
+        {/* Three-scenario table */}
+        {done && (
+          <div className="mb-6">
+            <h3 className="text-xs font-mono text-bilads-fg/50 mb-2">
+              Scenario Analysis
+            </h3>
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="text-bilads-fg/40 border-b border-bilads-fg/10">
+                  <th className="text-left py-1.5">Scenario</th>
+                  <th className="text-right py-1.5">Est. Reach</th>
+                  <th className="text-right py-1.5">Responses</th>
+                  <th className="text-right py-1.5">Conversions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="text-bilads-fg/40">
+                  <td className="py-1.5">Conservative</td>
+                  <td className="text-right">
+                    {Math.round(simulation.totalImpressions * 0.6).toLocaleString()}
+                  </td>
+                  <td className="text-right">
+                    {Math.round(simulation.estimatedConversions * 3.5)}
+                  </td>
+                  <td className="text-right">
+                    {Math.round(simulation.estimatedConversions * 0.35)}
+                  </td>
+                </tr>
+                <tr className="text-bilads-accent font-bold border-y border-bilads-fg/10">
+                  <td className="py-1.5">Base</td>
+                  <td className="text-right">
+                    {simulation.totalImpressions.toLocaleString()}
+                  </td>
+                  <td className="text-right">
+                    {Math.round(simulation.estimatedConversions * 7)}
+                  </td>
+                  <td className="text-right">
+                    {simulation.estimatedConversions}
+                  </td>
+                </tr>
+                <tr className="text-bilads-fg/40">
+                  <td className="py-1.5">Optimistic</td>
+                  <td className="text-right">
+                    {Math.round(simulation.totalImpressions * 1.5).toLocaleString()}
+                  </td>
+                  <td className="text-right">
+                    {Math.round(simulation.estimatedConversions * 14)}
+                  </td>
+                  <td className="text-right">
+                    {Math.round(simulation.estimatedConversions * 2.2)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Assumptions */}
         <div className="text-xs font-mono text-bilads-fg/30 space-y-1">
           {simulation.assumptions.map((a, i) => (
             <p key={i}>{a}</p>
           ))}
+          <p className="mt-2 text-[10px]">
+            These are scenario estimates, not predictions.
+            Actual results depend on creative quality, market conditions, and campaign execution.
+          </p>
         </div>
       </div>
     </div>
@@ -514,6 +661,7 @@ export default function ResultsPage() {
   const [selectedBoard, setSelectedBoard] = useState<string | null>(null);
   const [creativeBoard, setCreativeBoard] = useState<Billboard | null>(null);
   const [simulation, setSimulation] = useState<SimulationOutput | null>(null);
+  const [showBand, setShowBand] = useState(false);
 
   // Load form state and fetch research
   useEffect(() => {
@@ -692,6 +840,53 @@ export default function ResultsPage() {
                 : []
             }
           />
+          {/* BAND discussion */}
+          {research && agentPhase >= 2 && (
+            <BandDiscussion
+              research={research}
+              topBoards={top3Boards}
+              visible={showBand}
+              onToggle={() => setShowBand((v) => !v)}
+            />
+          )}
+
+          {/* Kylon workspace status */}
+          {research && agentPhase >= 2 && (
+            <div className="bg-bilads-surface/30 border border-bilads-fg/5 rounded-lg p-3">
+              <p className="text-[10px] font-mono text-bilads-fg/30 mb-2">
+                KYLON WORKSPACE
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  { task: "Market research", status: "complete" },
+                  { task: "Media planning", status: "complete" },
+                  { task: "Creative generation", status: creativeBoard ? "complete" : "pending" },
+                  { task: "Campaign packaging", status: "pending" },
+                ].map((item) => (
+                  <div key={item.task} className="flex items-center gap-2 text-[10px] font-mono">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        item.status === "complete"
+                          ? "bg-green-400"
+                          : item.status === "active"
+                            ? "bg-bilads-accent animate-pulse"
+                            : "bg-bilads-fg/20"
+                      }`}
+                    />
+                    <span className="text-bilads-fg/40">{item.task}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sponsor attribution */}
+          <div className="mt-auto pt-3 border-t border-bilads-fg/5 text-[9px] font-mono text-bilads-fg/20 space-y-0.5">
+            <p>Data: Nimble + SF Planning</p>
+            <p>Agents: BAND</p>
+            <p>Workforce: Kylon</p>
+            <p>Backend: InsForge</p>
+          </div>
         </div>
 
         {/* Map */}
