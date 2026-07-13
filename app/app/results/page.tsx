@@ -632,11 +632,11 @@ function SimulationView({
           </button>
         </div>
 
-        {/* 3D street-map billboard preview */}
+        {/* Street-level billboard-face detection preview */}
         <div className="mb-6">
           <SimulationStreetView board={simulation.board} concept={simulation.concept} />
           <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-mono text-bilads-fg/35">
-            <span>3D map preview: generated creative placed at the selected billboard coordinates</span>
+            <span>Street-level preview: creative is placed only when an existing ad face is detected</span>
             <span>{simulation.concept.language.toUpperCase()}</span>
           </div>
         </div>

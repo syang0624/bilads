@@ -51,6 +51,7 @@ export default function SimulationStreetView({
     const streetUrl =
       `/api/streetview?lat=${camera.lat.toFixed(7)}&lng=${camera.lng.toFixed(7)}` +
       `&heading=${heading.toFixed(1)}&pitch=3&fov=74`;
+    const detectionCacheKey = `bilads:detected-billboard:${board.id}:${streetUrl}`;
 
     let cancelled = false;
     const street = new Image();
@@ -62,14 +63,10 @@ export default function SimulationStreetView({
       setStatus("detecting");
 
       try {
-        const imageUrl = canvas.toDataURL("image/jpeg", 0.72);
-        const detect = await fetch("/api/detect-billboard", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl, imageW: width, imageH: height, boardName: board.name }),
-        });
-        const detection = (await detect.json()) as DetectionResponse;
+        const cached = readDetectionCache(detectionCacheKey);
+        const detection = cached ?? (await detectBillboard(canvas, width, height, board.name));
         if (cancelled) return;
+        if (!cached) writeDetectionCache(detectionCacheKey, detection);
 
         if (!detection.quad) {
           setStatus("not-found");
@@ -125,6 +122,45 @@ export default function SimulationStreetView({
       </div>
     </div>
   );
+}
+
+async function detectBillboard(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+  boardName: string
+): Promise<DetectionResponse> {
+  const imageUrl = canvas.toDataURL("image/jpeg", 0.62);
+  const detect = await fetch("/api/detect-billboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageUrl, imageW: width, imageH: height, boardName }),
+  });
+  return (await detect.json()) as DetectionResponse;
+}
+
+function readDetectionCache(key: string): DetectionResponse | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { value?: DetectionResponse; expiresAt?: number };
+    if (!parsed.value || !parsed.expiresAt || parsed.expiresAt <= Date.now()) {
+      window.sessionStorage.removeItem(key);
+      return null;
+    }
+    return parsed.value;
+  } catch {
+    return null;
+  }
+}
+
+function writeDetectionCache(key: string, value: DetectionResponse) {
+  try {
+    window.sessionStorage.setItem(
+      key,
+      JSON.stringify({ value, expiresAt: Date.now() + 60 * 60 * 1000 })
+    );
+  } catch {}
 }
 
 function Fallback3DMap({

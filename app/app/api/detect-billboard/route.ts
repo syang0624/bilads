@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { chat, GmiUnavailableError } from "@/lib/gmi";
 
 export const runtime = "nodejs";
@@ -11,6 +12,9 @@ type Detection = {
   reason?: string;
   source: "gmi" | "none" | "error";
 };
+
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const cache = new Map<string, { value: Detection; expiresAt: number }>();
 
 const SYSTEM =
   "You detect existing outdoor advertising faces in street-level imagery. " +
@@ -60,6 +64,20 @@ function normalizeQuad(value: unknown, imageW: number, imageH: number): [Point, 
   return scaled as [Point, Point, Point, Point];
 }
 
+function cacheKey(imageUrl: string): string {
+  return createHash("sha256").update(imageUrl).digest("hex");
+}
+
+function isRateLimit(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    ("status" in err || "error" in err) &&
+    ((err as { status?: unknown }).status === 429 ||
+      String((err as { error?: unknown }).error ?? "").toLowerCase().includes("rate limit"))
+  );
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse<Detection>> {
   let body: { imageUrl?: string; imageW?: number; imageH?: number; boardName?: string };
   try {
@@ -74,6 +92,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<Detection>> {
   if (!imageUrl || !/^data:image\//i.test(imageUrl) || imageW <= 0 || imageH <= 0) {
     return NextResponse.json({ quad: null, source: "error", reason: "imageUrl, imageW, and imageH are required" }, { status: 400 });
   }
+
+  const key = cacheKey(imageUrl);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return NextResponse.json(cached.value);
+  if (cached) cache.delete(key);
 
   try {
     const text = await chat(
@@ -97,14 +120,23 @@ export async function POST(req: NextRequest): Promise<NextResponse<Detection>> {
     );
     const parsed = parseJson(text) as { quad?: unknown; confidence?: unknown; reason?: unknown };
     const quad = normalizeQuad(parsed.quad, imageW, imageH);
-    return NextResponse.json({
+    const value: Detection = {
       quad,
       confidence: Number(parsed.confidence ?? (quad ? 0.5 : 0)),
       reason: typeof parsed.reason === "string" ? parsed.reason : undefined,
       source: quad ? "gmi" : "none",
-    });
+    };
+    cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+    return NextResponse.json(value);
   } catch (err) {
-    if (!(err instanceof GmiUnavailableError)) console.error("detect-billboard failed:", err);
-    return NextResponse.json({ quad: null, source: "error", reason: "Detector unavailable" });
+    const reason = isRateLimit(err)
+      ? "Detector rate-limited; keeping Street View scene unmodified."
+      : "Detector unavailable";
+    if (!(err instanceof GmiUnavailableError) && !isRateLimit(err)) {
+      console.error("detect-billboard failed:", err);
+    }
+    const value: Detection = { quad: null, source: "error", reason };
+    cache.set(key, { value, expiresAt: Date.now() + 5 * 60 * 1000 });
+    return NextResponse.json(value);
   }
 }
