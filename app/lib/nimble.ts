@@ -69,5 +69,12 @@ export function nimbleFallbackFinding(): string | null {
   if (signals.length === 0) return null;
   // Highest-confidence board's lead signal — real Places-derived intelligence.
   const best = signals.reduce((a, b) => (b.confidence > a.confidence ? b : a));
-  return `${NIMBLE_TAG}${best.location}: ${best.signals[0]}.`;
+  // Prefer a live web-search signal when the enrichment pipeline has run
+  // (scripts/nimble-live-enrich.mjs) — fresher and more demo-worthy. The
+  // "Live web (…):" prefix is dropped; the [Nimble] tag already marks source.
+  const live = best.signals
+    .find((s) => s.startsWith("Live web"))
+    ?.replace(/^Live web[^:]*:\s*/, "");
+  const text = live ?? best.signals[0];
+  return `${NIMBLE_TAG}${best.location}: ${text.length > 140 ? text.slice(0, 139).trimEnd() + "…" : text}`;
 }
