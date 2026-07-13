@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
-import type { Billboard } from "@/lib/types";
+import type { Billboard, HeatmapPoint } from "@/lib/types";
+import heatmapData from "@/lib/traffic-heatmap.json";
 import "leaflet/dist/leaflet.css";
 
 // Custom pin icon with rank number
@@ -43,6 +44,45 @@ function FitBounds({ boards }: { boards: Billboard[] }) {
   return null;
 }
 
+// Heatmap layer using leaflet.heat
+function HeatmapLayer({ visible }: { visible: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!visible) return;
+
+    // leaflet.heat is a side-effect import that adds L.heatLayer
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("leaflet.heat");
+
+    const points = (heatmapData as HeatmapPoint[]).map(
+      ([lat, lng, intensity]) => [lat, lng, intensity] as [number, number, number]
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const heat = (L as any).heatLayer(points, {
+      radius: 20,
+      blur: 15,
+      maxZoom: 15,
+      max: 1.0,
+      gradient: {
+        0.2: "#1a1a2e",
+        0.4: "#e94560",
+        0.6: "#F5D400",
+        0.8: "#F5D400",
+        1.0: "#ffffff",
+      },
+    });
+
+    heat.addTo(map);
+    return () => {
+      map.removeLayer(heat);
+    };
+  }, [visible, map]);
+
+  return null;
+}
+
 export default function MapView({
   boards,
   selectedBoard,
@@ -53,35 +93,52 @@ export default function MapView({
   selectedBoard: string | null;
   onSelectBoard: (id: string | null) => void;
 }) {
+  const [showHeatmap, setShowHeatmap] = useState(false);
+
   return (
-    <MapContainer
-      center={[37.775, -122.418]}
-      zoom={13}
-      className="w-full h-full"
-      zoomControl={false}
-      style={{ background: "#1a1a1a" }}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      />
-      <FitBounds boards={boards} />
-      {boards.map((board, i) => {
-        const rank = i + 1;
-        return (
-          <Marker
-            key={board.id}
-            position={[board.lat, board.lng]}
-            icon={createPinIcon(rank, selectedBoard === board.id)}
-            eventHandlers={{
-              click: () =>
-                onSelectBoard(
-                  selectedBoard === board.id ? null : board.id
-                ),
-            }}
-          />
-        );
-      })}
-    </MapContainer>
+    <div className="w-full h-full relative">
+      <MapContainer
+        center={[37.775, -122.418]}
+        zoom={13}
+        className="w-full h-full"
+        zoomControl={false}
+        style={{ background: "#1a1a1a" }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        />
+        <FitBounds boards={boards} />
+        <HeatmapLayer visible={showHeatmap} />
+        {boards.map((board, i) => {
+          const rank = i + 1;
+          return (
+            <Marker
+              key={board.id}
+              position={[board.lat, board.lng]}
+              icon={createPinIcon(rank, selectedBoard === board.id)}
+              eventHandlers={{
+                click: () =>
+                  onSelectBoard(
+                    selectedBoard === board.id ? null : board.id
+                  ),
+              }}
+            />
+          );
+        })}
+      </MapContainer>
+
+      {/* Heatmap toggle */}
+      <button
+        onClick={() => setShowHeatmap((v) => !v)}
+        className={`absolute bottom-4 left-4 z-[1000] px-3 py-2 rounded-lg text-xs font-mono transition-colors ${
+          showHeatmap
+            ? "bg-bilads-accent text-bilads-bg"
+            : "bg-bilads-surface/90 text-bilads-fg/70 hover:text-bilads-fg"
+        }`}
+      >
+        {showHeatmap ? "Hide traffic" : "Show traffic"}
+      </button>
+    </div>
   );
 }

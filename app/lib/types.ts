@@ -1,3 +1,6 @@
+// AUTO-GENERATED from types.ts by scripts/sync-frontend-data.mjs — do not edit here.
+// Edit the source, then `npm run sync` (runs automatically on predev/prebuild).
+
 /**
  * Bilads — shared data contracts (single source of truth).
  *
