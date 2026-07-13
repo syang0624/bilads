@@ -1,72 +1,111 @@
+/**
+ * POST /api/generate (PRD §7.3) — Creative Director + two parallel image gens.
+ *
+ * Query params:
+ *   ?live=1 — bypass the disk cache READ (still writes) for the on-stage
+ *             regenerate moment. Steven's button appends this.
+ *
+ * Failure chain (app never dead-ends):
+ *   1. live GMI call (LLM + 2 parallel images, each 20s-capped)
+ *   2. on timeout/error → pre-cached result for this (board, product, variant)
+ *   3. no cache → canned copy templates + placeholder image path
+ */
 import { NextRequest, NextResponse } from "next/server";
-import type { GenerateRequest, GenerateResponse, Billboard } from "@/lib/types";
-import billboardsData from "@/lib/billboards.json";
+import type { AdConcept, GenerateRequest, GenerateResponse } from "@/lib/types";
+import { getBoard } from "@/lib/boards";
+import {
+  runCreativeDirector,
+  fallbackConcepts,
+  safeImagePrompt,
+  type ConceptDraft,
+} from "@/lib/creative";
+import { generateCacheKey, readGenerateCache, writeGenerateCache } from "@/lib/cache";
+import { generateAdImage, placeholderUrl } from "@/lib/images";
+import { recordAgentRun } from "@/lib/insforge";
 
-const billboards = billboardsData as Billboard[];
+export const runtime = "nodejs";
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as GenerateRequest;
-  const board = billboards.find((b) => b.id === body.billboardId);
-
-  if (!board) {
-    return NextResponse.json({ error: "Board not found" }, { status: 404 });
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  let body: GenerateRequest;
+  try {
+    body = (await req.json()) as GenerateRequest;
+    validate(body);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "invalid request body" },
+      { status: 400 }
+    );
   }
 
-  const variant = body.variant ?? 0;
-  const isSpanish = board.spanishFriendly;
+  const board = getBoard(body.billboardId);
+  if (!board) {
+    return NextResponse.json({ error: `unknown billboardId: ${body.billboardId}` }, { status: 400 });
+  }
 
-  // Mock creative concepts — in production this would be LLM + GMI image gen
-  const concepts = [
-    {
-      id: `concept-${variant}-0`,
-      language: "en" as const,
-      headline: getHeadline(body.brief.productName, board.neighborhood, variant, "en"),
-      subline: getSubline(body.brief.description, board, variant, "en"),
-      imageUrl: `/api/placeholder?w=1024&h=512&text=${encodeURIComponent(body.brief.productName)}&v=${variant}-0`,
-      rationale: `English concept for ${board.neighborhood} audience, ${board.trafficType} traffic.`,
-    },
-    {
-      id: `concept-${variant}-1`,
-      language: isSpanish ? ("es" as const) : ("en" as const),
-      headline: getHeadline(body.brief.productName, board.neighborhood, variant, isSpanish ? "es" : "en"),
-      subline: getSubline(body.brief.description, board, variant, isSpanish ? "es" : "en"),
-      imageUrl: `/api/placeholder?w=1024&h=512&text=${encodeURIComponent(body.brief.productName)}&v=${variant}-1`,
-      rationale: isSpanish
-        ? `Spanish concept for ${board.neighborhood}'s Latino community.`
-        : `Alternate English angle for ${board.neighborhood} viewers.`,
-    },
-  ];
+  const live = req.nextUrl.searchParams.get("live") === "1";
+  const cacheKey = generateCacheKey({
+    billboardId: body.billboardId,
+    productName: body.brief.productName,
+    variant: body.variant ?? 0,
+    consistentBrand: body.consistentBrand,
+  });
 
-  const response: GenerateResponse = { concepts };
+  // 0) Cache hit returns immediately (unless ?live=1 bypasses the read).
+  if (!live) {
+    const cached = readGenerateCache(cacheKey);
+    if (cached) return NextResponse.json(cached);
+  }
+
+  let response: GenerateResponse;
+  let path: "live" | "cache" | "canned" = "live";
+  try {
+    // 1) Creative Director (one LLM call, 2 concepts) …
+    const drafts = await runCreativeDirector(body, board);
+    // … then two PARALLEL image calls (each internally 20s-capped + placeholder fallback).
+    const imageUrls = await Promise.all(
+      drafts.map((d, i) =>
+        generateAdImage(safeImagePrompt(d.imagePrompt, board), cacheKey, i, body.brief.productName)
+      )
+    );
+    response = { concepts: drafts.map((d, i) => toConcept(d, imageUrls[i])) };
+    writeGenerateCache(cacheKey, response);
+  } catch {
+    // 2) Any LLM failure → pre-cached result for this key …
+    const cached = readGenerateCache(cacheKey);
+    if (cached) {
+      response = cached;
+      path = "cache";
+    } else {
+      // 3) … or seed/canned copy + placeholder image path.
+      const drafts = fallbackConcepts({ productName: body.brief.productName, board });
+      response = {
+        concepts: drafts.map((d) => toConcept(d, placeholderUrl(body.brief.productName))),
+      };
+      path = "canned";
+    }
+  }
+
+  void recordAgentRun({
+    agent: "creative-director",
+    input: { billboardId: body.billboardId, variant: body.variant ?? 0, live },
+    live: path === "live",
+    output: { path, concepts: response.concepts.map((c) => c.headline) },
+  });
+
   return NextResponse.json(response);
 }
 
-function getHeadline(name: string, _neighborhood: string, variant: number, lang: string): string {
-  const en = [
-    `${name}. Move Different.`,
-    `${name}. Own Your City.`,
-    `${name}. Start Here.`,
-  ];
-  const es = [
-    `${name}. Muevete Diferente.`,
-    `${name}. Tu Ciudad, Tu Estilo.`,
-    `${name}. Empieza Aqui.`,
-  ];
-  const list = lang === "es" ? es : en;
-  return list[variant % list.length];
+function toConcept(draft: ConceptDraft, imageUrl: string): AdConcept {
+  const { imagePrompt: _drop, ...rest } = draft;
+  return { ...rest, imageUrl };
 }
 
-function getSubline(_description: string, board: Billboard, variant: number, lang: string): string {
-  const en = [
-    `Made for ${board.neighborhood}. Made for you.`,
-    `The smarter choice for ${board.neighborhood}.`,
-    `Discover what's next in ${board.neighborhood}.`,
-  ];
-  const es = [
-    `Hecho para ${board.neighborhood}. Hecho para ti.`,
-    `La mejor opcion para ${board.neighborhood}.`,
-    `Descubre lo nuevo en ${board.neighborhood}.`,
-  ];
-  const list = lang === "es" ? es : en;
-  return list[variant % list.length];
+function validate(body: GenerateRequest): void {
+  if (typeof body?.billboardId !== "string" || !body.billboardId) throw new Error("missing billboardId");
+  if (!body.brief?.productName) throw new Error("missing brief.productName");
+  if (!body.audienceProfile || !Array.isArray(body.audienceProfile.interests))
+    throw new Error("missing audienceProfile.interests");
+  if (typeof body.consistentBrand !== "boolean") throw new Error("missing consistentBrand");
+  if (body.variant !== undefined && typeof body.variant !== "number")
+    throw new Error("variant must be a number");
 }

@@ -4,7 +4,7 @@
  * per-board `reason` strings (≤15 words) and 4 `findings`. If the LLM fails,
  * canned reason templates fill in and the rankings still ship.
  */
-import type { Billboard, CampaignParams, ResearchResponse } from "@/types";
+import type { Billboard, CampaignParams, ResearchResponse } from "@/lib/types";
 import type { ResearcherBlock } from "./researcher";
 import { scoreBoards, cannedReason } from "./scoring";
 import { chatJson } from "./parse";

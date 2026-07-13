@@ -1,132 +1,100 @@
+/**
+ * POST /api/research (PRD §7.2) — Researcher then Media Buyer, one response.
+ *
+ * Query params:
+ *   ?mock=1  — contract-exact hardcoded mock (Phase 1; Steven's dev harness)
+ *
+ * Failure chain (app never dead-ends):
+ *   live GMI agents → deterministic fallback (keyword researcher + math
+ *   rankings + canned reasons). A well-formed request always gets a 200.
+ */
 import { NextRequest, NextResponse } from "next/server";
-import type {
-  ResearchRequest,
-  ResearchResponse,
-  Billboard,
-  BoardRanking,
-  AudienceProfile,
-} from "@/lib/types";
-import billboardsData from "@/lib/billboards.json";
+import type { ResearchRequest, ResearchResponse } from "@/lib/types";
+import { loadBoards } from "@/lib/boards";
+import { runResearcher, fallbackResearcher, type ResearcherBlock } from "@/lib/researcher";
+import { runMediaBuyer } from "@/lib/mediaBuyer";
+import { scoreBoards, cannedReason } from "@/lib/scoring";
+import { buildMockResearchResponse } from "@/lib/mock";
+import { recordAgentRun } from "@/lib/insforge";
 
-const billboards = billboardsData as Billboard[];
+export const runtime = "nodejs";
 
-function jaccard(a: string[], b: string[]): number {
-  const setA = new Set(a.map((s) => s.toLowerCase()));
-  const setB = new Set(b.map((s) => s.toLowerCase()));
-  let intersection = 0;
-  for (const item of setA) {
-    if (setB.has(item)) intersection++;
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (req.nextUrl.searchParams.get("mock") === "1") {
+    return NextResponse.json(buildMockResearchResponse());
   }
-  const union = new Set([...setA, ...setB]).size;
-  return union === 0 ? 0 : intersection / union;
-}
 
-function rankBoards(
-  audienceProfile: AudienceProfile,
-  weeklyBudgetUsd: number,
-  awarenessWeight: number
-): { rankings: BoardRanking[]; top3: string[] } {
-  const w = awarenessWeight;
+  let body: ResearchRequest;
+  try {
+    body = (await req.json()) as ResearchRequest;
+    validate(body);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "invalid request body" },
+      { status: 400 }
+    );
+  }
 
-  const ranked = billboards
-    .map((board) => {
-      const demoMatch = jaccard(audienceProfile.interests, board.audienceTags);
-      const targetReach = board.dailyImpressions * demoMatch;
-      // Corrected formula: w=1 means pure awareness (raw impressions)
-      const valueScore =
-        (w * board.dailyImpressions + (1 - w) * targetReach * 3) /
-        board.weeklyCostUsd;
+  const boards = loadBoards();
 
-      return {
-        id: board.id,
-        score: Math.round(valueScore * 100) / 100,
-        demoMatch: Math.round(demoMatch * 100) / 100,
-        reason: generateReason(board, demoMatch),
-        inBudget: board.weeklyCostUsd <= weeklyBudgetUsd,
-      };
-    })
-    .sort((a, b) => b.score - a.score);
+  // Agent 1 — Researcher (LLM, silent fallback to deterministic profile).
+  let researcher: ResearcherBlock;
+  let researcherLive = true;
+  try {
+    researcher = await runResearcher(body.brief);
+  } catch {
+    researcher = fallbackResearcher(body.brief);
+    researcherLive = false;
+  }
 
-  const top3 = ranked
-    .filter((r) => r.inBudget)
-    .slice(0, 3)
-    .map((r) => r.id);
-
-  return { rankings: ranked, top3 };
-}
-
-function generateReason(board: Billboard, demoMatch: number): string {
-  const traits = board.audienceTags.slice(0, 3).join(", ");
-  if (demoMatch > 0.3) return `Strong audience overlap: ${traits}.`;
-  if (demoMatch > 0.15) return `Moderate match in ${board.neighborhood} for ${traits}.`;
-  return `High visibility in ${board.neighborhood}, broad reach.`;
-}
-
-export async function POST(request: NextRequest) {
-  const body = (await request.json()) as ResearchRequest;
-
-  // Mock researcher output — in production this would be an LLM call
-  const audienceProfile: AudienceProfile = {
-    ageRange: "25-40",
-    income: "$60k-$120k",
-    interests: extractInterests(body.brief.audience, body.brief.description),
-    mindset:
-      "Looking for products that fit their urban lifestyle and values.",
-  };
-
-  const { rankings, top3 } = rankBoards(
-    audienceProfile,
-    body.campaign.weeklyBudgetUsd,
-    body.campaign.awarenessWeight
-  );
-
-  const response: ResearchResponse = {
-    researcher: {
-      audienceProfile,
-      buyingTriggers: [
-        "Visibility during daily commute",
-        "Neighborhood relevance and local trust",
-        "Repetitive exposure building brand recall",
-      ],
-      adToneGuidance: `Focus on urban authenticity and practical value. The audience responds to bold, honest messaging that respects their time and intelligence. Use neighborhood-specific references where possible.`,
-      findings: [
-        `Target audience: ${audienceProfile.ageRange}, urban professionals in SF`,
-        `Key interests: ${audienceProfile.interests.slice(0, 4).join(", ")}`,
-        `Best neighborhoods: high foot traffic + audience overlap areas`,
-        `Recommended tone: bold, authentic, locally-rooted messaging`,
-      ],
-    },
-    mediaBuyer: {
+  // Agent 2 — Media Buyer (math ranks; LLM reasons with canned fallback inside).
+  let mediaBuyer: ResearchResponse["mediaBuyer"];
+  try {
+    mediaBuyer = await runMediaBuyer(boards, researcher, body.campaign);
+  } catch {
+    const { rankings, top3 } = scoreBoards(
+      boards,
+      researcher.audienceProfile.interests,
+      body.campaign
+    );
+    const byId = new Map(boards.map((b) => [b.id, b]));
+    for (const r of rankings) {
+      r.reason = cannedReason(byId.get(r.id)!, researcher.audienceProfile.interests);
+    }
+    mediaBuyer = {
       rankings,
       top3,
       findings: [
-        `Evaluated ${billboards.length} SF billboard locations`,
-        `Top 3 boards selected within $${body.campaign.weeklyBudgetUsd}/week budget`,
-        `Awareness weight: ${Math.round(body.campaign.awarenessWeight * 100)}% — ${body.campaign.awarenessWeight > 0.5 ? "prioritizing raw impressions" : "prioritizing audience match"}`,
-        `Best value: ${rankings[0]?.id || "none"} at score ${rankings[0]?.score || 0}`,
+        `Scored all ${rankings.length} boards on audience match and impressions per dollar.`,
+        `Top pick: ${top3[0] ?? "none in budget"}.`,
+        `${rankings.filter((r) => r.inBudget).length} of ${rankings.length} boards fit the weekly budget.`,
+        "Rankings are deterministic — math decides, agents explain.",
       ],
-    },
-  };
+    };
+  }
+
+  const response: ResearchResponse = { researcher, mediaBuyer };
+
+  // Fire-and-forget job-state tracking (InsForge; in-memory fallback offline).
+  void recordAgentRun({
+    agent: "researcher+media-buyer",
+    input: { productName: body.brief.productName, campaign: body.campaign },
+    live: researcherLive,
+    output: { top3: mediaBuyer.top3 },
+  });
 
   return NextResponse.json(response);
 }
 
-function extractInterests(audience: string, description: string): string[] {
-  const text = `${audience} ${description}`.toLowerCase();
-  const allTags = [
-    "commuters", "tech", "office workers", "professionals", "finance",
-    "startups", "young professionals", "fitness", "outdoors", "eco-conscious",
-    "affluent", "creatives", "foodies", "coffee", "nightlife", "walkable",
-    "latino", "families", "students", "suburban", "value-seekers", "tourists",
-    "shoppers",
-  ];
-  const matched = allTags.filter((tag) => {
-    const words = tag.split(/[\s-]+/);
-    return words.some((w) => text.includes(w));
-  });
-  // Always return at least 3 interests
-  if (matched.length < 3) {
-    return [...matched, "young professionals", "commuters", "urban"].slice(0, 5);
-  }
-  return matched.slice(0, 7);
+function validate(body: ResearchRequest): void {
+  if (!body?.brief) throw new Error("missing brief");
+  const { productName, description, audience } = body.brief;
+  if (typeof productName !== "string" || !productName.trim()) throw new Error("missing brief.productName");
+  if (typeof description !== "string") throw new Error("missing brief.description");
+  if (typeof audience !== "string") throw new Error("missing brief.audience");
+  const c = body.campaign;
+  if (!c || typeof c.weeklyBudgetUsd !== "number") throw new Error("missing campaign.weeklyBudgetUsd");
+  if (typeof c.campaignWeeks !== "number") throw new Error("missing campaign.campaignWeeks");
+  if (typeof c.awarenessWeight !== "number" || c.awarenessWeight < 0 || c.awarenessWeight > 1)
+    throw new Error("campaign.awarenessWeight must be in [0,1]");
 }

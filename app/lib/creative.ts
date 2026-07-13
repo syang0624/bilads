@@ -1,14 +1,20 @@
 /**
  * Agent 3 — The Creative Director 🎨 (PRD §5).
- * One LLM call → 2 concepts; language rule from board.spanishFriendly;
- * canned copy templates as the deterministic fallback.
+ * One LLM call → 2 concepts; language rule from board.spanishFriendly.
+ * Deterministic fallback order: hand-written seed copy from
+ * data/creative-seed/<billboardId>.<sampleId>.json (Godson's pre-written
+ * EN/ES pairs, e.g. the Mission bilingual demo moment), then canned templates.
  *
  * Content safety: image prompts never contain text/logos/claims — copy is an
  * HTML overlay added by the frontend, and only approved claims from the brief
  * are ever used.
  */
-import type { AdConcept, Billboard, GenerateRequest } from "@/types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { AdConcept, Billboard, GenerateRequest } from "@/lib/types";
+import { SAMPLES } from "@/lib/samples";
 import { chatJson } from "./parse";
+import { dataDir } from "./paths";
 
 /** Concept before the image is generated. */
 export type ConceptDraft = Omit<AdConcept, "imageUrl"> & { imagePrompt: string };
@@ -99,15 +105,45 @@ export function safeImagePrompt(imagePrompt: string, board: Billboard): string {
 }
 
 /* ---------------------------------------------------------------------------
- * Canned copy templates — deterministic fallback (PRD §5). Language rule still
- * honored: spanishFriendly boards get EN + ES.
+ * Deterministic fallbacks (PRD §5): seed copy first, canned templates second.
  * ------------------------------------------------------------------------- */
+
+interface CreativeSeedFile {
+  billboardId: string;
+  sampleId: string;
+  concepts: Array<ConceptDraft & { imageUrl?: string }>;
+}
+
+/** Map a brief's productName back to its sample id ("Volt" -> "volt"). */
+function sampleIdForProduct(productName: string): string | null {
+  const hit = SAMPLES.find(
+    (s) => s.brief.productName.toLowerCase() === productName.toLowerCase().trim()
+  );
+  return hit?.id ?? null;
+}
+
+/** Godson's pre-written EN/ES copy, e.g. data/creative-seed/sf-mission-24th.volt.json. */
+export function loadCreativeSeed(billboardId: string, productName: string): ConceptDraft[] | null {
+  const sampleId = sampleIdForProduct(productName);
+  if (!sampleId) return null;
+  try {
+    const file = join(dataDir(), "creative-seed", `${billboardId}.${sampleId}.json`);
+    const seed = JSON.parse(readFileSync(file, "utf8")) as CreativeSeedFile;
+    if (!Array.isArray(seed.concepts) || seed.concepts.length < 2) return null;
+    return seed.concepts.slice(0, 2).map(({ imageUrl: _drop, ...draft }) => draft);
+  } catch {
+    return null;
+  }
+}
 
 export function fallbackConcepts(args: {
   productName: string;
   board: Billboard;
 }): ConceptDraft[] {
   const { productName, board } = args;
+  const seeded = loadCreativeSeed(board.id, productName);
+  if (seeded) return seeded;
+
   const en: ConceptDraft = {
     id: "concept-0",
     language: "en",

@@ -7,9 +7,12 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { GenerateResponse } from "@/types";
+import type { GenerateResponse } from "@/lib/types";
+import { dataDir } from "./paths";
 
-const CACHE_DIR = join(process.cwd(), "data", "cache");
+function cacheDir(): string {
+  return join(dataDir(), "cache");
+}
 
 export function generateCacheKey(args: {
   billboardId: string;
@@ -24,7 +27,7 @@ export function generateCacheKey(args: {
 
 export function readGenerateCache(key: string): GenerateResponse | null {
   try {
-    return JSON.parse(readFileSync(join(CACHE_DIR, `${key}.json`), "utf8")) as GenerateResponse;
+    return JSON.parse(readFileSync(join(cacheDir(), `${key}.json`), "utf8")) as GenerateResponse;
   } catch {
     return null;
   }
@@ -32,8 +35,8 @@ export function readGenerateCache(key: string): GenerateResponse | null {
 
 export function writeGenerateCache(key: string, value: GenerateResponse): void {
   try {
-    mkdirSync(CACHE_DIR, { recursive: true });
-    writeFileSync(join(CACHE_DIR, `${key}.json`), JSON.stringify(value, null, 2));
+    mkdirSync(cacheDir(), { recursive: true });
+    writeFileSync(join(cacheDir(), `${key}.json`), JSON.stringify(value, null, 2));
   } catch {
     // cache write failure must never fail the request
   }

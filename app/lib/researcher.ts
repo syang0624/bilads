@@ -4,7 +4,7 @@
  * Fallback path: deterministic keyword→tag profile so /api/research never
  * dead-ends, even with wifi off.
  */
-import type { ProductBrief, ResearchResponse } from "@/types";
+import type { ProductBrief, ResearchResponse } from "@/lib/types";
 import { chatJson } from "./parse";
 import type { ChatMessage } from "./gmi";
 import { nimblePromptBlock, nimbleFallbackFinding, NIMBLE_TAG } from "./nimble";

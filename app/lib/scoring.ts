@@ -11,7 +11,7 @@
  * where w = awarenessWeight, so w=1 → raw impressions per dollar. The frontend
  * passes `awarenessWeight` through unchanged. Flagged in team chat.
  */
-import type { Billboard, BoardRanking, CampaignParams } from "@/types";
+import type { Billboard, BoardRanking, CampaignParams } from "@/lib/types";
 
 export function jaccard(a: string[], b: string[]): number {
   const A = new Set(a.map((s) => s.toLowerCase().trim()));

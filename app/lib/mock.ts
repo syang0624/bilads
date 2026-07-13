@@ -4,7 +4,7 @@
  * ids, scores, and shapes always agree with data/billboards.json and types.ts
  * while staying 100% LLM-free and stable across calls.
  */
-import type { CampaignParams, ProductBrief, ResearchResponse } from "@/types";
+import type { CampaignParams, ProductBrief, ResearchResponse } from "@/lib/types";
 import { loadBoards } from "./boards";
 import { fallbackResearcher } from "./researcher";
 import { scoreBoards, cannedReason } from "./scoring";

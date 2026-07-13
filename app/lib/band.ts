@@ -8,8 +8,8 @@
  * (research output, rankings, concepts, Nimble signals) so the discussion is
  * meaningful, fast, and works offline.
  */
-import type { AdConcept, ResearchResponse } from "@/types";
-import type { ProductBrief } from "@/types";
+import type { AdConcept, ResearchResponse } from "@/lib/types";
+import type { ProductBrief } from "@/lib/types";
 import { getBoard } from "./boards";
 import { nimbleForBoard, loadNimbleSignals } from "./nimble";
 import { recordAgentMessage, recordApproval } from "./insforge";
@@ -82,14 +82,14 @@ export function startRoom(context: BandContext): BandRoom {
 
   // 1) Market Research Agent — location findings from Nimble data.
   const nimble = topBoard ? nimbleForBoard(topBoard.id) : null;
-  const market = loadNimbleSignals()?.market;
+  const anySignal = [...loadNimbleSignals().values()][0];
   post(
     "Market Research Agent",
     "location intelligence (Nimble)",
     nimble
-      ? `${topBoard!.name}: ${nimble.signals.slice(0, 2).join("; ")}. Confidence ${Math.round(nimble.confidence * 100)}%.`
-      : market
-        ? `Market scan: ${market.signals.slice(0, 2).join("; ")}.`
+      ? `${topBoard!.name}: ${nimble.signals.slice(0, 2).join("; ")}. Confidence ${Math.round(nimble.confidence * 100)}% (${nimble.derivedFrom}).`
+      : anySignal
+        ? `Market scan (${anySignal.location}): ${anySignal.signals.slice(0, 2).join("; ")}.`
         : `Audience for ${brief.productName} concentrates around daily-routine corridors.`
   );
 
