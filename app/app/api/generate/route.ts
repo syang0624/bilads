@@ -2,13 +2,14 @@
  * POST /api/generate (PRD §7.3) — Creative Director + two parallel image gens.
  *
  * Query params:
- *   ?live=1 — bypass the disk cache READ (still writes) for the on-stage
- *             regenerate moment. Steven's button appends this.
+ *   ?live=1 — bypass cached JSON and existing generated PNGs for the on-stage
+ *             regenerate moment. The Regenerate button appends this.
  *
  * Failure chain (app never dead-ends):
- *   1. live GMI call (LLM + 2 parallel images, each 20s-capped)
- *   2. on timeout/error → pre-cached result for this (board, product, variant)
- *   3. no cache → canned copy templates + placeholder image path
+ *   1. live Creative Director copy + 2 parallel image calls
+ *   2. copy failure → canned prompts still continue to image generation
+ *   3. image failure → pre-cached result for this (board, product, variant)
+ *   4. no cache → canned copy templates + placeholder image path
  */
 import { NextRequest, NextResponse } from "next/server";
 import type { AdConcept, GenerateRequest, GenerateResponse } from "@/lib/types";
@@ -53,54 +54,77 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     consistentBrand: body.consistentBrand,
   });
 
+  const cached = readGenerateCache(cacheKey);
+
   // 0) Cache hit returns immediately (unless ?live=1 bypasses the read).
-  if (!live) {
-    const cached = readGenerateCache(cacheKey);
-    if (cached) return NextResponse.json(cached);
+  if (!live && cached) return NextResponse.json(cached);
+
+  let drafts: ConceptDraft[];
+  let copyPath: "live" | "canned" = "live";
+  try {
+    drafts = await runCreativeDirector(body, board);
+  } catch {
+    // Copy generation and image generation are independent. A stale/unavailable
+    // chat model must not stop the working image provider from rendering art.
+    drafts = fallbackConcepts({ productName: body.brief.productName, board });
+    copyPath = "canned";
   }
+
+  const imageUrls = await Promise.all(
+    drafts.map((draft, index) =>
+      generateAdImage(
+        safeImagePrompt(draft.imagePrompt, board),
+        cacheKey,
+        index,
+        body.brief.productName,
+        live
+      )
+    )
+  );
 
   let response: GenerateResponse;
   let path: "live" | "cache" | "canned" = "live";
-  try {
-    // 1) Creative Director (one LLM call, 2 concepts) …
-    const drafts = await runCreativeDirector(body, board);
-    // … then two PARALLEL image calls (each internally 20s-capped + placeholder fallback).
-    const imageUrls = await Promise.all(
-      drafts.map((d, i) =>
-        generateAdImage(safeImagePrompt(d.imagePrompt, board), cacheKey, i, body.brief.productName)
-      )
-    );
+  const allImagesGenerated = imageUrls.every((url) => !url.startsWith("/api/placeholder"));
+
+  if (allImagesGenerated) {
     response = { concepts: drafts.map((d, i) => toConcept(d, imageUrls[i])) };
+    // Never cache placeholder responses as though they were successful live art.
     writeGenerateCache(cacheKey, response);
-  } catch {
-    // 2) Any LLM failure → pre-cached result for this key …
-    const cached = readGenerateCache(cacheKey);
-    if (cached) {
-      response = cached;
-      path = "cache";
-    } else {
-      // 3) … or seed/canned copy + placeholder image path.
-      const drafts = fallbackConcepts({ productName: body.brief.productName, board });
-      response = {
-        concepts: drafts.map((d) => toConcept(d, placeholderUrl(body.brief.productName))),
-      };
-      path = "canned";
-    }
+  } else if (cached) {
+    // 2) Image failure → the last complete cached response for this key …
+    response = cached;
+    path = "cache";
+  } else {
+    // 3) … or canned copy + placeholder art. This response is not cached.
+    const fallbackDrafts = fallbackConcepts({ productName: body.brief.productName, board });
+    response = {
+      concepts: fallbackDrafts.map((draft) =>
+        toConcept(draft, placeholderUrl(body.brief.productName))
+      ),
+    };
+    copyPath = "canned";
+    path = "canned";
   }
 
   void recordAgentRun({
     agent: "creative-director",
     input: { billboardId: body.billboardId, variant: body.variant ?? 0, live },
-    live: path === "live",
-    output: { path, concepts: response.concepts.map((c) => c.headline) },
+    live: path === "live" && copyPath === "live",
+    output: { path, copyPath, concepts: response.concepts.map((c) => c.headline) },
   });
 
   return NextResponse.json(response);
 }
 
 function toConcept(draft: ConceptDraft, imageUrl: string): AdConcept {
-  const { imagePrompt: _drop, ...rest } = draft;
-  return { ...rest, imageUrl };
+  return {
+    id: draft.id,
+    language: draft.language,
+    headline: draft.headline,
+    subline: draft.subline,
+    rationale: draft.rationale,
+    imageUrl,
+  };
 }
 
 function validate(body: GenerateRequest): void {

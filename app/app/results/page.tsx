@@ -336,9 +336,10 @@ function CreativePanel({
   );
 
   const fetchConcepts = useCallback(
-    async (variant = 0) => {
+    async (variant = 0, forceLive = false) => {
       setLoading(true);
-      const res = await fetch("/api/generate", {
+      const endpoint = forceLive ? "/api/generate?live=1" : "/api/generate";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -364,7 +365,7 @@ function CreativePanel({
     const newVariants = [...variants];
     newVariants[index]++;
     setVariants(newVariants);
-    fetchConcepts(newVariants[index]);
+    fetchConcepts(newVariants[index], true);
   };
 
   return (
