@@ -16,10 +16,13 @@ import { runMediaBuyer } from "@/lib/mediaBuyer";
 import { scoreBoards, cannedReason } from "@/lib/scoring";
 import { buildMockResearchResponse } from "@/lib/mock";
 import { recordAgentRun } from "@/lib/insforge";
+import { requireApiKey } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const denied = requireApiKey(req);
+  if (denied) return denied;
   if (req.nextUrl.searchParams.get("mock") === "1") {
     return NextResponse.json(buildMockResearchResponse());
   }
