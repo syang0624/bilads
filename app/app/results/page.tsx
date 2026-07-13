@@ -14,6 +14,8 @@ import type {
   SimulationOutput,
   DailyPoint,
 } from "@/lib/types";
+import type { BlobsResult } from "@/lib/blobs";
+import type { AttentionReport } from "@/lib/attention";
 import billboardsData from "@/lib/billboards.json";
 import BillboardComposite from "./BillboardComposite";
 import BandDiscussion from "./BandDiscussion";
@@ -25,6 +27,7 @@ const MapView = dynamic(() => import("./MapView"), { ssr: false }) as React.Comp
   rankings: BoardRanking[];
   selectedBoard: string | null;
   onSelectBoard: (id: string | null) => void;
+  blobs?: BlobsResult["blobs"];
 }>;
 
 // ─── Agent Theater ──────────────────────────────────────────────────────────
@@ -168,11 +171,13 @@ function InfoCard({
   ranking,
   rank,
   onDesignAds,
+  nearbyAccounts,
 }: {
   board: Billboard;
   ranking: BoardRanking;
   rank: number;
   onDesignAds: () => void;
+  nearbyAccounts?: number;
 }) {
   const [showScores, setShowScores] = useState(false);
   const scores = computeLocationScores(board, ranking.demoMatch);
@@ -215,6 +220,14 @@ function InfoCard({
           <p className="text-bilads-fg/40">Traffic</p>
           <p>{board.trafficType}</p>
         </div>
+        {nearbyAccounts !== undefined && (
+          <div className="col-span-2">
+            <p className="text-bilads-fg/40">Target accounts nearby</p>
+            <p className="text-bilads-accent font-bold">
+              {nearbyAccounts} within 0.25 mi
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Location Score Breakdown */}
@@ -275,6 +288,37 @@ function CreativePanel({
   const [loading, setLoading] = useState(true);
   const [variants, setVariants] = useState([0, 0]);
   const [consistentBrand, setConsistentBrand] = useState(false);
+  // VLM attention reports, keyed by the concept's imageUrl (stable per art).
+  const [attention, setAttention] = useState<Record<string, AttentionReport | "loading">>({});
+
+  const testAttention = useCallback(
+    async (concept: AdConcept) => {
+      const key = concept.imageUrl;
+      setAttention((a) => ({ ...a, [key]: "loading" }));
+      try {
+        const res = await fetch("/api/attention", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageUrl: concept.imageUrl,
+            headline: concept.headline,
+            subline: concept.subline,
+            productName: brief.productName,
+          }),
+        });
+        if (!res.ok) throw new Error();
+        const report: AttentionReport = await res.json();
+        setAttention((a) => ({ ...a, [key]: report }));
+      } catch {
+        setAttention((a) => {
+          const rest = { ...a };
+          delete rest[key];
+          return rest;
+        });
+      }
+    },
+    [brief.productName]
+  );
 
   const fetchConcepts = useCallback(
     async (variant = 0) => {
@@ -365,12 +409,61 @@ function CreativePanel({
                     <p className="text-xs text-bilads-fg/50 font-mono">
                       {concept.rationale}
                     </p>
-                    <button
-                      onClick={() => regenerate(i)}
-                      className="mt-3 text-sm text-bilads-accent hover:text-bilads-accent/80 font-mono"
-                    >
-                      Regenerate
-                    </button>
+                    <div className="mt-3 flex items-center gap-4">
+                      <button
+                        onClick={() => regenerate(i)}
+                        className="text-sm text-bilads-accent hover:text-bilads-accent/80 font-mono"
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        onClick={() => testAttention(concept)}
+                        disabled={attention[concept.imageUrl] === "loading"}
+                        className="text-sm text-bilads-fg/60 hover:text-bilads-fg font-mono disabled:opacity-40"
+                      >
+                        {attention[concept.imageUrl] === "loading"
+                          ? "Testing attention…"
+                          : "Test attention"}
+                      </button>
+                    </div>
+                    {(() => {
+                      const report = attention[concept.imageUrl];
+                      if (!report || report === "loading") return null;
+                      return (
+                        <div className="mt-3 border-t border-bilads-fg/10 pt-3 space-y-1.5">
+                          <p className="text-[10px] font-mono text-bilads-fg/40">
+                            EYE LANDS ON:{" "}
+                            <span className="text-bilads-fg/70">{report.firstNoticed}</span>
+                          </p>
+                          {(
+                            [
+                              ["Legibility", report.legibility],
+                              ["Brand recall", report.brandRecall],
+                              ["Shareability", report.shareability],
+                            ] as const
+                          ).map(([label, score]) => (
+                            <div key={label} className="flex items-center gap-2 text-[10px] font-mono">
+                              <span className="text-bilads-fg/40 w-20 flex-shrink-0">{label}</span>
+                              <div className="flex-1 bg-bilads-bg/50 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className="h-full bg-bilads-accent/70 rounded-full"
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
+                              <span className="text-bilads-fg/60 w-7 text-right">{score}</span>
+                            </div>
+                          ))}
+                          <p className="text-[10px] font-mono text-bilads-fg/50 italic">
+                            {report.verdict}
+                          </p>
+                          <p className="text-[9px] font-mono text-bilads-fg/25">
+                            {report.source === "vlm"
+                              ? "Vision model · GMI Cloud"
+                              : "Heuristic fallback (no vision)"}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
@@ -662,6 +755,7 @@ export default function ResultsPage() {
   const [creativeBoard, setCreativeBoard] = useState<Billboard | null>(null);
   const [simulation, setSimulation] = useState<SimulationOutput | null>(null);
   const [showBand, setShowBand] = useState(false);
+  const [blobsData, setBlobsData] = useState<BlobsResult | null>(null);
 
   // Load form state and fetch research
   useEffect(() => {
@@ -686,6 +780,15 @@ export default function ResultsPage() {
         // Animate: researcher active for 4s, then media buyer for 4s
         setTimeout(() => setAgentPhase(1), 4000);
         setTimeout(() => setAgentPhase(2), 8000);
+        // Opportunity blobs: ICP-matched account clusters for the map.
+        fetch("/api/blobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audienceProfile: data.researcher.audienceProfile, brief: b }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((blobs: BlobsResult | null) => blobs && setBlobsData(blobs))
+          .catch(() => {});
       });
   }, [router]);
 
@@ -922,6 +1025,7 @@ export default function ResultsPage() {
               rankings={research?.mediaBuyer.rankings || []}
               selectedBoard={selectedBoard}
               onSelectBoard={setSelectedBoard}
+              blobs={blobsData?.blobs}
             />
           )}
 
@@ -936,6 +1040,7 @@ export default function ResultsPage() {
                   )!
                 }
                 rank={research.mediaBuyer.top3.indexOf(selectedBoard) + 1}
+                nearbyAccounts={blobsData?.nearbyByBoard[selectedBoard]}
                 onDesignAds={() => {
                   const board = billboards.find(
                     (b) => b.id === selectedBoard

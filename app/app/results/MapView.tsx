@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Circle, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { Billboard, HeatmapPoint } from "@/lib/types";
+import type { OpportunityBlob } from "@/lib/blobs";
 import heatmapData from "@/lib/traffic-heatmap.json";
 import "leaflet/dist/leaflet.css";
 
@@ -87,13 +88,16 @@ export default function MapView({
   boards,
   selectedBoard,
   onSelectBoard,
+  blobs = [],
 }: {
   boards: Billboard[];
   rankings?: unknown;
   selectedBoard: string | null;
   onSelectBoard: (id: string | null) => void;
+  blobs?: OpportunityBlob[];
 }) {
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showBlobs, setShowBlobs] = useState(true);
 
   return (
     // z-0 opens a stacking context so Leaflet's internal panes (z-index
@@ -112,6 +116,33 @@ export default function MapView({
         />
         <FitBounds boards={boards} />
         <HeatmapLayer visible={showHeatmap} />
+        {/* Opportunity blobs — ICP-matched account clusters (Peel-style ABM) */}
+        {showBlobs &&
+          blobs.map((blob, i) => (
+            <Circle
+              key={`blob-${i}`}
+              center={[blob.lat, blob.lng]}
+              radius={blob.radiusM}
+              pathOptions={{
+                color: "#F5D400",
+                weight: 1,
+                opacity: 0.5,
+                fillColor: "#F5D400",
+                fillOpacity: 0.12,
+                dashArray: "6 6",
+              }}
+            >
+              <Tooltip direction="top" opacity={0.95}>
+                <div style={{ fontFamily: "monospace", fontSize: 11 }}>
+                  <strong>
+                    {blob.count} target accounts — {blob.label}
+                  </strong>
+                  <br />
+                  {blob.sampleNames.join(" · ")}
+                </div>
+              </Tooltip>
+            </Circle>
+          ))}
         {boards.map((board, i) => {
           const rank = i + 1;
           return (
@@ -141,6 +172,20 @@ export default function MapView({
       >
         {showHeatmap ? "Hide traffic" : "Show traffic"}
       </button>
+
+      {/* Opportunity blob toggle */}
+      {blobs.length > 0 && (
+        <button
+          onClick={() => setShowBlobs((v) => !v)}
+          className={`absolute bottom-4 left-32 z-[1000] px-3 py-2 rounded-lg text-xs font-mono transition-colors ${
+            showBlobs
+              ? "bg-bilads-accent text-bilads-bg"
+              : "bg-bilads-surface/90 text-bilads-fg/70 hover:text-bilads-fg"
+          }`}
+        >
+          {showBlobs ? "Hide ICP blobs" : "Show ICP blobs"}
+        </button>
+      )}
     </div>
   );
 }

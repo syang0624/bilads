@@ -23,6 +23,31 @@ export default function Home() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [siteUrl, setSiteUrl] = useState("");
+  const [scanState, setScanState] = useState<"idle" | "scanning" | "error">("idle");
+  const [scanError, setScanError] = useState("");
+
+  // URL → brief + ICP: scan a company homepage and prefill the form.
+  const handleScan = useCallback(async () => {
+    if (!siteUrl.trim() || scanState === "scanning") return;
+    setScanState("scanning");
+    setScanError("");
+    try {
+      const res = await fetch("/api/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: siteUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "scan failed");
+      setBrief((b) => ({ ...b, ...data.brief }));
+      setScanState("idle");
+    } catch (e) {
+      setScanState("error");
+      setScanError(e instanceof Error ? e.message : "scan failed");
+    }
+  }, [siteUrl, scanState]);
+
   const handleImageDrop = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -74,6 +99,35 @@ export default function Home() {
 
       {/* Upload form */}
       <div className="w-full max-w-2xl space-y-6">
+        {/* URL → brief + ICP scan */}
+        <div>
+          <div className="flex gap-3">
+            <input
+              type="url"
+              placeholder="Paste your website — we'll write the brief"
+              value={siteUrl}
+              onChange={(e) => setSiteUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleScan()}
+              className="flex-1 bg-bilads-surface border border-bilads-fg/10 rounded-lg px-4 py-3 text-bilads-fg placeholder:text-bilads-fg/30 focus:outline-none focus:border-bilads-accent/50 font-mono text-sm"
+            />
+            <button
+              onClick={handleScan}
+              disabled={!siteUrl.trim() || scanState === "scanning"}
+              className="bg-bilads-accent text-bilads-bg font-bold text-sm px-5 rounded-lg hover:bg-bilads-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {scanState === "scanning" ? "Scanning…" : "Scan site"}
+            </button>
+          </div>
+          {scanState === "scanning" && (
+            <p className="mt-2 text-xs font-mono text-bilads-accent animate-pulse">
+              Reading the homepage → inferring product + ideal customer profile…
+            </p>
+          )}
+          {scanState === "error" && (
+            <p className="mt-2 text-xs font-mono text-red-400">{scanError}</p>
+          )}
+        </div>
+
         {/* Image drop zone */}
         <label className="block border-2 border-dashed border-bilads-fg/20 rounded-lg p-8 text-center cursor-pointer hover:border-bilads-accent/50 transition-colors">
           {imagePreview ? (
