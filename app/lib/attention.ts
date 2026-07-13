@@ -9,6 +9,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { chatJson } from "./parse";
+import { downloadFile } from "./insforge";
 
 export interface AttentionReport {
   /** What the eye lands on first, in the model's words. */
@@ -53,32 +54,15 @@ export async function loadCreativePng(imageUrl: string): Promise<Buffer | null> 
     const base = new URL(baseUrl);
     const prefix = `/api/storage/buckets/${GENERATED_BUCKET}/objects/`;
     if (url.origin !== base.origin || !url.pathname.startsWith(prefix)) return null;
+    const key = decodeURIComponent(url.pathname.slice(prefix.length));
+    if (!/^generated\/[\w.-]+\.png$/.test(key)) return null;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
-    try {
-      const response = await fetch(url, {
-        cache: "no-store",
-        redirect: "error",
-        signal: controller.signal,
-      });
-      if (!response.ok) return null;
-      const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-      const allowedContentType =
-        contentType.startsWith("image/") ||
-        contentType === "application/octet-stream" ||
-        contentType === "binary/octet-stream";
-      if (!allowedContentType) return null;
-      const contentLength = Number(response.headers.get("content-length") ?? 0);
-      if (contentLength > MAX_CREATIVE_BYTES) return null;
-
-      const bytes = Buffer.from(await response.arrayBuffer());
-      const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-      if (bytes.length > MAX_CREATIVE_BYTES || !bytes.subarray(0, 8).equals(pngSignature)) return null;
-      return bytes;
-    } finally {
-      clearTimeout(timer);
+    const bytes = await downloadFile(GENERATED_BUCKET, key);
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    if (!bytes || bytes.length > MAX_CREATIVE_BYTES || !bytes.subarray(0, 8).equals(pngSignature)) {
+      return null;
     }
+    return bytes;
   } catch {
     return null;
   }

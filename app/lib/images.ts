@@ -1,8 +1,8 @@
 /**
  * Image generation + persistence for /api/generate.
- * Generated art lands in app/public/generated with deterministic filenames so
- * a cached GenerateResponse's imageUrls stay valid across restarts. On any
- * failure Steven's /api/placeholder route ships instead — never a broken image.
+ * Generated art is uploaded to InsForge Storage for durable production URLs.
+ * Local development can fall back to app/public/generated when Storage is not
+ * configured. On any failure the placeholder route ships instead.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -25,8 +25,8 @@ function generatedDir(): string {
 }
 
 /**
- * Generate one ad image and save it. Returns the /public URL path, or the
- * placeholder URL if generation fails for any reason.
+ * Generate and persist one ad image. Returns its durable Storage URL (or a
+ * local development path), with a placeholder URL on failure.
  */
 export async function generateAdImage(
   prompt: string,

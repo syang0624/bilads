@@ -198,6 +198,16 @@ export async function uploadFile(
   return { url: data.url, key: data.key };
 }
 
+/** Download a known object through the authenticated server client. */
+export async function downloadFile(bucket: string, key: string): Promise<Buffer | null> {
+  const admin = insforgeAdmin();
+  if (!admin) return null;
+
+  const { data, error } = await admin.storage.from(bucket).download(key);
+  if (error) throw error;
+  return data ? Buffer.from(await data.arrayBuffer()) : null;
+}
+
 /* --- campaign CRUD + approval trail + agent job state -------------------------- */
 
 export async function createCampaign(data: Record<string, unknown>): Promise<Row> {
