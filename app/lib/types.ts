@@ -1,3 +1,6 @@
+// AUTO-GENERATED from types.ts by scripts/sync-frontend-data.mjs — do not edit here.
+// Edit the source, then `npm run sync` (runs automatically on predev/prebuild).
+
 /**
  * Bilads — shared data contracts (single source of truth).
  *
@@ -428,3 +431,97 @@ export interface BillboardDeepFile {
  * Anything the raw data can't supply (photo, adCorners, dailyImpressions) is
  * hand-curated per PRD §8 — plausible beats precise.
  */
+
+/* ============================================================================
+ * G. Sponsor data — Nimble location signals (GODSON.md Phase 3)
+ * ----------------------------------------------------------------------------
+ * Per-board location intelligence the Research Agent folds into its context.
+ * Files live at data/nimble-signals/<boardId>.json (+ index.json). Pre-API,
+ * these are derived from real Google Places nearby-business data; the live
+ * Nimble pipeline augments `signals` and populates `source_urls`.
+ * ========================================================================== */
+
+export interface NimbleSignal {
+    /** matches Billboard.id */
+    boardId: string;
+    /** human-readable, e.g. "24th St @ Mission (Mission)" */
+    location: string;
+    /** short intelligence bullets for the Researcher's context */
+    signals: string[];
+    /** evidence links; empty until the live Nimble pipeline fills them */
+    source_urls: string[];
+    /** 0..1, higher when backed by more real nearby-business data */
+    confidence: number;
+    /** provenance of the signals, e.g. "google-places-nearby (real)" */
+    derivedFrom: string;
+    /** count of real nearby businesses the signals were built from */
+    nearbyBusinessCount: number;
+}
+
+/* ============================================================================
+ * H. Sponsor data — InsForge persistence schema (GODSON.md Phase 3)
+ * ----------------------------------------------------------------------------
+ * Storage contract for campaigns, generated creatives, agent-run logs, and the
+ * human approval trail. Backend (Noriaki) implements CRUD against InsForge;
+ * these types are the shared row shapes. All ids are InsForge-assigned strings.
+ * ========================================================================== */
+
+export type CampaignStatus = "draft" | "researched" | "designed" | "simulated" | "archived";
+export type AgentName = "researcher" | "mediaBuyer" | "creativeDirector";
+export type ApprovalDecision = "approved" | "rejected" | "edited";
+
+/** One saved campaign — the "reopen campaign" flow reads these back. */
+export interface CampaignRecord {
+    id: string;
+    createdAt: string; // ISO timestamp
+    updatedAt: string; // ISO timestamp
+    /** optional sample this was prefilled from ("volt" | "fog-city" | "ledgerly") */
+    sampleId?: string;
+    brief: ProductBrief;
+    campaign: CampaignParams;
+    status: CampaignStatus;
+    /** cached Media Buyer output for this campaign, if research has run */
+    research?: ResearchResponse;
+    /** board ids the user actually opened / designed for */
+    openedBoardIds: string[];
+}
+
+/** A generated creative set for one board within a campaign. */
+export interface CreativeRecord {
+    id: string;
+    campaignId: string;
+    billboardId: string;
+    variant: number;
+    consistentBrand: boolean;
+    concepts: AdConcept[]; // exactly 2, as returned by /api/generate
+    createdAt: string;
+}
+
+/** One agent invocation, for observability + the "agent run logs" trail. */
+export interface AgentRunRecord {
+    id: string;
+    campaignId: string;
+    agent: AgentName;
+    model: string; // GMI model id used
+    /** hash of the input payload, for dedupe / cache-hit inspection */
+    inputHash: string;
+    /** raw JSON string the agent returned (post-parse), for auditing */
+    output: string;
+    startedAt: string;
+    finishedAt: string;
+    ok: boolean;
+    /** true if the deterministic fallback path produced this result */
+    fallbackUsed: boolean;
+}
+
+/** Human decision on an agent recommendation (approval trail). */
+export interface ApprovalRecord {
+    id: string;
+    campaignId: string;
+    /** board the decision applies to; absent = campaign-level decision */
+    billboardId?: string;
+    decision: ApprovalDecision;
+    decidedBy: string; // user identifier
+    note?: string;
+    decidedAt: string;
+}
