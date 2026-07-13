@@ -2,6 +2,19 @@
 
 **Role:** API endpoints, agent logic, GMI Cloud client, BAND/Kylon/InsForge backend integration.
 
+> **Status (2026-07-13, branch `noriaki`)** — all code phases implemented and verified offline:
+> `lib/gmi.ts` (20s-timeout chat+image), `/api/research` (mock via `?mock=1` + real agents +
+> deterministic fallback; Nimble signals injected, `[Nimble] `-prefixed findings for badges),
+> `/api/generate` (Creative Director → 2 parallel images → disk cache in `data/cache/`,
+> `?live=1` bypass, canned+placeholder fallback), `/api/band`, `/api/kylon`, `lib/insforge.ts`
+> (in-memory fallback when unconfigured). Scoring uses the **corrected formula** below; all three
+> samples reproduce data/README.md's expected top-3 table. `scripts/warm-cache.mjs` pre-warms the
+> demo cache once a key exists.
+>
+> **Still blocked on humans:** GMI key + model IDs from Godson (then verify live round-trip and
+> run warm-cache), formula confirmation in team chat (§7.8), InsForge credentials (offline
+> fallback active until then), and the Phase-6 rehearsal.
+
 Noriaki owns everything behind the API: the three-agent pipeline, deterministic scoring, LLM orchestration, fallback paths, caching, and the backend integration of BAND, Kylon, and InsForge.
 
 ---

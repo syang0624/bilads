@@ -1,0 +1,151 @@
+{
+  "generated_at": "2026-07-13T00:00:00Z",
+  "note": "Nimble live market-intelligence snapshot for SF. Shape per SPONSORS.md §1. Refreshed by the Nimble pipeline before each demo run; consumed by the Researcher agent as extra context.",
+  "market": {
+    "location": "San Francisco, CA",
+    "signals": [
+      "weekday office return rates climbing in FiDi and SoMa corridors",
+      "e-bike and micromobility searches up sharply quarter over quarter",
+      "specialty coffee openings clustering in Mission and Hayes Valley",
+      "startup hiring events concentrated around SoMa and Potrero this month"
+    ],
+    "source_urls": [],
+    "confidence": 0.78
+  },
+  "boards": {
+    "sf-101-vermont": {
+      "location": "US-101 N @ Vermont St",
+      "signals": [
+        "heavy AM commuter flow from Peninsula tech corridor",
+        "adjacent Showplace Square design district drawing daytime professionals",
+        "two cycling-infrastructure projects announced within 1 mile"
+      ],
+      "source_urls": [],
+      "confidence": 0.82
+    },
+    "sf-280-dalycity": {
+      "location": "I-280 N @ Daly City Approach",
+      "signals": [
+        "high suburban family commuter volume, value-retail density nearby",
+        "SF State student traffic on parallel transit lines"
+      ],
+      "source_urls": [],
+      "confidence": 0.71
+    },
+    "sf-market-downtown": {
+      "location": "Market St @ Powell",
+      "signals": [
+        "high public transit activity at Powell Station",
+        "large volume of young adult and tourist foot traffic",
+        "multiple late-night businesses within two blocks"
+      ],
+      "source_urls": [],
+      "confidence": 0.84
+    },
+    "sf-mission-24th": {
+      "location": "24th St @ Mission",
+      "signals": [
+        "dense Latino-owned retail and restaurant corridor",
+        "strong evening and weekend foot traffic around BART plaza",
+        "bilingual signage norm — Spanish creative outperforms here",
+        "weekend mercado events drawing family foot traffic"
+      ],
+      "source_urls": [],
+      "confidence": 0.86
+    },
+    "sf-marina-chestnut": {
+      "location": "Chestnut St @ Fillmore",
+      "signals": [
+        "boutique fitness studios at record density on this strip",
+        "affluent young-professional foot traffic peaks weekend mornings",
+        "outdoor-gear and athleisure retailers expanding locally"
+      ],
+      "source_urls": [],
+      "confidence": 0.8
+    },
+    "sf-valencia-mission": {
+      "location": "Valencia St @ 20th",
+      "signals": [
+        "specialty coffee and wine-bar openings accelerating",
+        "car-free corridor pilot boosting pedestrian dwell time",
+        "gallery walk events every first Friday"
+      ],
+      "source_urls": [],
+      "confidence": 0.83
+    },
+    "sf-hayes-valley": {
+      "location": "Hayes St @ Octavia",
+      "signals": [
+        "design-forward retail cluster with high-income walk-in traffic",
+        "new cafe openings and patio seating expansion"
+      ],
+      "source_urls": [],
+      "confidence": 0.79
+    },
+    "sf-sunset-irving": {
+      "location": "Irving St @ 19th Ave",
+      "signals": [
+        "family-oriented retail corridor near Golden Gate Park",
+        "steady student traffic from nearby campuses"
+      ],
+      "source_urls": [],
+      "confidence": 0.72
+    },
+    "sf-financial-montgomery": {
+      "location": "Montgomery St @ Market",
+      "signals": [
+        "finance and legal office density highest in the city",
+        "lunchtime foot traffic recovered to pre-2020 levels",
+        "B2B SaaS event venues within walking distance"
+      ],
+      "source_urls": [],
+      "confidence": 0.85
+    },
+    "sf-union-square": {
+      "location": "Powell St @ Geary",
+      "signals": [
+        "tourist and shopper volume peaks midday and weekends",
+        "flagship retail re-leasing pushing premium foot traffic"
+      ],
+      "source_urls": [],
+      "confidence": 0.81
+    },
+    "sf-soma-harrison": {
+      "location": "Harrison St @ 8th",
+      "signals": [
+        "startup office cluster with heavy vehicle commute flow",
+        "climbing gyms and fitness studios anchoring evening traffic",
+        "weekday e-bike commute counts rising on this corridor"
+      ],
+      "source_urls": [],
+      "confidence": 0.82
+    },
+    "sf-richmond-geary": {
+      "location": "Geary Blvd @ 20th Ave",
+      "signals": [
+        "family dining corridor with strong weekend traffic",
+        "38-Geary bus line among the busiest on the west side"
+      ],
+      "source_urls": [],
+      "confidence": 0.74
+    },
+    "sf-dogpatch-3rd": {
+      "location": "3rd St @ 20th",
+      "signals": [
+        "creative studios and small tech offices expanding",
+        "new waterfront development adding daily foot traffic"
+      ],
+      "source_urls": [],
+      "confidence": 0.77
+    },
+    "sf-embarcadero-ferry": {
+      "location": "Embarcadero @ Ferry Building",
+      "signals": [
+        "commuter ferry ridership at multi-year high",
+        "farmers market drawing affluent foodie crowds three days a week"
+      ],
+      "source_urls": [],
+      "confidence": 0.84
+    }
+  }
+}
