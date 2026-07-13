@@ -1,26 +1,26 @@
 [
   {
     "id": "sf-101-vermont",
-    "name": "US-101 N @ Vermont St",
-    "lat": 37.77007,
-    "lng": -122.407618,
+    "name": "US-101 N @ 6th St",
+    "lat": 37.776837224000076,
+    "lng": -122.40296556099997,
     "photo": "/billboards/sf-101-vermont.jpg",
     "adCorners": [
       [
-        262,
-        168
+        216,
+        178
       ],
       [
-        742,
-        132
+        377,
+        166
       ],
       [
-        758,
-        402
+        377,
+        214
       ],
       [
-        270,
-        428
+        216,
+        218
       ]
     ],
     "dailyImpressions": 52000,
@@ -45,33 +45,33 @@
   },
   {
     "id": "sf-280-dalycity",
-    "name": "I-280 N @ Daly City Approach",
-    "lat": 37.7052,
-    "lng": -122.4649,
+    "name": "US-101 N @ 8th East Face",
+    "lat": 37.77007049200006,
+    "lng": -122.40553258899996,
     "photo": "/billboards/sf-280-dalycity.jpg",
     "adCorners": [
       [
-        240,
-        190
+        302,
+        176
       ],
       [
-        726,
-        160
+        425,
+        168
       ],
       [
-        740,
-        430
+        425,
+        216
       ],
       [
-        252,
-        452
+        302,
+        219
       ]
     ],
     "dailyImpressions": 28000,
     "trafficType": "vehicle",
     "avgDwellSeconds": 4,
     "weeklyCostUsd": 1600,
-    "neighborhood": "Outer Mission",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "commuters",
@@ -89,33 +89,33 @@
   },
   {
     "id": "sf-market-downtown",
-    "name": "Market St @ Powell",
-    "lat": 37.78561,
-    "lng": -122.408155,
+    "name": "US-101 N @ 8th East Face",
+    "lat": 37.77007049200006,
+    "lng": -122.40553258899996,
     "photo": "/billboards/sf-market-downtown.jpg",
     "adCorners": [
       [
-        288,
+        302,
         176
       ],
       [
-        768,
-        150
+        425,
+        168
       ],
       [
-        776,
-        420
+        425,
+        216
       ],
       [
-        296,
-        440
+        302,
+        219
       ]
     ],
     "dailyImpressions": 44000,
     "trafficType": "foot+vehicle",
     "avgDwellSeconds": 6,
     "weeklyCostUsd": 2900,
-    "neighborhood": "Downtown",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "office workers",
@@ -133,26 +133,26 @@
   },
   {
     "id": "sf-mission-24th",
-    "name": "24th St @ Mission",
-    "lat": 37.748895,
-    "lng": -122.418405,
+    "name": "Mission St @ 8th",
+    "lat": 37.777518085000054,
+    "lng": -122.412676525,
     "photo": "/billboards/sf-mission-24th.jpg",
     "adCorners": [
       [
-        254,
-        182
+        496,
+        12
       ],
       [
-        730,
+        640,
+        60
+      ],
+      [
+        640,
+        205
+      ],
+      [
+        498,
         158
-      ],
-      [
-        744,
-        428
-      ],
-      [
-        266,
-        446
       ]
     ],
     "dailyImpressions": 38000,
@@ -177,33 +177,33 @@
   },
   {
     "id": "sf-marina-chestnut",
-    "name": "Chestnut St @ Fillmore",
-    "lat": 37.800099,
-    "lng": -122.435785,
+    "name": "Folsom St @ 7th",
+    "lat": 37.77716378000008,
+    "lng": -122.40770925099997,
     "photo": "/billboards/sf-marina-chestnut.jpg",
     "adCorners": [
       [
-        276,
-        172
+        236,
+        94
       ],
       [
-        756,
-        152
+        345,
+        93
       ],
       [
-        766,
-        418
+        346,
+        205
       ],
       [
-        284,
-        436
+        236,
+        206
       ]
     ],
     "dailyImpressions": 26000,
     "trafficType": "foot",
     "avgDwellSeconds": 9,
     "weeklyCostUsd": 2600,
-    "neighborhood": "Marina",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "fitness",
@@ -221,33 +221,33 @@
   },
   {
     "id": "sf-valencia-mission",
-    "name": "Valencia St @ 20th",
-    "lat": 37.758351,
-    "lng": -122.420958,
+    "name": "Folsom St @ 7th",
+    "lat": 37.77716378000008,
+    "lng": -122.40770925099997,
     "photo": "/billboards/sf-valencia-mission.jpg",
     "adCorners": [
       [
-        268,
-        180
+        236,
+        94
       ],
       [
-        744,
-        156
+        345,
+        93
       ],
       [
-        756,
-        424
+        346,
+        205
       ],
       [
-        278,
-        442
+        236,
+        206
       ]
     ],
     "dailyImpressions": 24000,
     "trafficType": "foot",
     "avgDwellSeconds": 10,
     "weeklyCostUsd": 1800,
-    "neighborhood": "Mission",
+    "neighborhood": "SoMa",
     "spanishFriendly": true,
     "audienceTags": [
       "creatives",
@@ -265,33 +265,33 @@
   },
   {
     "id": "sf-hayes-valley",
-    "name": "Hayes St @ Octavia",
-    "lat": 37.776543,
-    "lng": -122.423583,
+    "name": "7th St @ Folsom",
+    "lat": 37.77674359900004,
+    "lng": -122.408239864,
     "photo": "/billboards/sf-hayes-valley.jpg",
     "adCorners": [
       [
-        272,
-        176
+        302,
+        181
       ],
       [
-        748,
-        154
+        392,
+        178
       ],
       [
-        760,
-        420
+        394,
+        219
       ],
       [
-        282,
-        438
+        303,
+        222
       ]
     ],
     "dailyImpressions": 21000,
     "trafficType": "foot",
     "avgDwellSeconds": 9,
     "weeklyCostUsd": 1700,
-    "neighborhood": "Hayes Valley",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "foodies",
@@ -309,33 +309,33 @@
   },
   {
     "id": "sf-sunset-irving",
-    "name": "Irving St @ 19th Ave",
-    "lat": 37.763789,
-    "lng": -122.475693,
+    "name": "US-101 S @ 8th St",
+    "lat": 37.77007049200006,
+    "lng": -122.40553258899996,
     "photo": "/billboards/sf-sunset-irving.jpg",
     "adCorners": [
       [
-        258,
-        184
+        430,
+        111
       ],
       [
-        734,
-        160
+        541,
+        95
       ],
       [
-        746,
-        426
+        542,
+        157
       ],
       [
-        268,
-        444
+        428,
+        173
       ]
     ],
     "dailyImpressions": 22000,
     "trafficType": "foot+vehicle",
     "avgDwellSeconds": 6,
     "weeklyCostUsd": 1250,
-    "neighborhood": "Sunset",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "families",
@@ -353,33 +353,33 @@
   },
   {
     "id": "sf-financial-montgomery",
-    "name": "Montgomery St @ Market",
-    "lat": 37.795693,
-    "lng": -122.400755,
+    "name": "US-101 N @ 8th West Face",
+    "lat": 37.77007049200006,
+    "lng": -122.40553258899996,
     "photo": "/billboards/sf-financial-montgomery.jpg",
     "adCorners": [
       [
-        284,
-        170
+        432,
+        68
       ],
       [
-        764,
-        148
+        640,
+        43
       ],
       [
-        774,
-        416
+        640,
+        212
       ],
       [
-        292,
-        434
+        430,
+        196
       ]
     ],
     "dailyImpressions": 40000,
     "trafficType": "foot+vehicle",
     "avgDwellSeconds": 6,
     "weeklyCostUsd": 3100,
-    "neighborhood": "Financial District",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "office workers",
@@ -397,26 +397,26 @@
   },
   {
     "id": "sf-union-square",
-    "name": "Powell St @ Geary",
-    "lat": 37.787182,
-    "lng": -122.40794,
+    "name": "Geary St @ Stockton",
+    "lat": 37.788125336000064,
+    "lng": -122.4037439,
     "photo": "/billboards/sf-union-square.jpg",
     "adCorners": [
       [
-        290,
-        174
+        393,
+        157
       ],
       [
-        770,
-        152
+        454,
+        156
       ],
       [
-        778,
-        420
+        454,
+        196
       ],
       [
-        298,
-        438
+        393,
+        197
       ]
     ],
     "dailyImpressions": 47000,
@@ -441,26 +441,26 @@
   },
   {
     "id": "sf-soma-harrison",
-    "name": "Harrison St @ 8th",
-    "lat": 37.773345,
-    "lng": -122.408478,
+    "name": "Harrison St @ 6th",
+    "lat": 37.779717651000055,
+    "lng": -122.40054211699999,
     "photo": "/billboards/sf-soma-harrison.jpg",
     "adCorners": [
       [
-        264,
-        178
+        326,
+        76
       ],
       [
-        740,
-        156
+        516,
+        28
       ],
       [
-        752,
-        422
+        516,
+        154
       ],
       [
-        274,
-        440
+        326,
+        180
       ]
     ],
     "dailyImpressions": 35000,
@@ -485,33 +485,33 @@
   },
   {
     "id": "sf-richmond-geary",
-    "name": "Geary Blvd @ 20th Ave",
-    "lat": 37.780701,
-    "lng": -122.464481,
+    "name": "US-101 N @ 6th St",
+    "lat": 37.776837224000076,
+    "lng": -122.40296556099997,
     "photo": "/billboards/sf-richmond-geary.jpg",
     "adCorners": [
       [
-        256,
-        186
+        216,
+        178
       ],
       [
-        732,
-        162
+        377,
+        166
       ],
       [
-        744,
-        428
+        377,
+        214
       ],
       [
-        266,
-        446
+        216,
+        218
       ]
     ],
     "dailyImpressions": 24000,
     "trafficType": "vehicle",
     "avgDwellSeconds": 5,
     "weeklyCostUsd": 1400,
-    "neighborhood": "Richmond",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "families",
@@ -529,33 +529,33 @@
   },
   {
     "id": "sf-dogpatch-3rd",
-    "name": "3rd St @ 20th",
-    "lat": 37.757764,
-    "lng": -122.388611,
+    "name": "US-101 N @ 8th West Face",
+    "lat": 37.77007049200006,
+    "lng": -122.40553258899996,
     "photo": "/billboards/sf-dogpatch-3rd.jpg",
     "adCorners": [
       [
-        262,
-        180
+        432,
+        68
       ],
       [
-        738,
-        158
+        640,
+        43
       ],
       [
-        750,
-        424
+        640,
+        212
       ],
       [
-        272,
-        442
+        430,
+        196
       ]
     ],
     "dailyImpressions": 22000,
     "trafficType": "foot+vehicle",
     "avgDwellSeconds": 7,
     "weeklyCostUsd": 1250,
-    "neighborhood": "Dogpatch",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "creatives",
@@ -573,33 +573,33 @@
   },
   {
     "id": "sf-embarcadero-ferry",
-    "name": "Embarcadero @ Ferry Building",
-    "lat": 37.793371,
-    "lng": -122.394233,
+    "name": "Harrison St @ 6th",
+    "lat": 37.779717651000055,
+    "lng": -122.40054211699999,
     "photo": "/billboards/sf-embarcadero-ferry.jpg",
     "adCorners": [
       [
-        286,
-        172
+        390,
+        12
       ],
       [
-        766,
-        150
+        640,
+        0
       ],
       [
-        776,
-        418
+        640,
+        116
       ],
       [
-        294,
-        436
+        390,
+        76
       ]
     ],
     "dailyImpressions": 45000,
     "trafficType": "foot+vehicle",
     "avgDwellSeconds": 7,
     "weeklyCostUsd": 3300,
-    "neighborhood": "Embarcadero",
+    "neighborhood": "SoMa",
     "spanishFriendly": false,
     "audienceTags": [
       "tourists",

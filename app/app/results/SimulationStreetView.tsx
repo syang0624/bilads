@@ -14,11 +14,51 @@ const CLEARANCE = 8;
 const POLE_R = 0.16;
 const POLE_INSET = PANEL_W * 0.28;
 
+const DEMO_STREET_VIEW: Record<
+  string,
+  { lat: number; lng: number; heading: number; pitch?: number; fov?: number }
+> = {
+  "sf-101-vermont": { lat: 37.776837224000076, lng: -122.40296556099997, heading: 90 },
+  "sf-280-dalycity": { lat: 37.77007049200006, lng: -122.40553258899996, heading: 0 },
+  "sf-market-downtown": { lat: 37.77007049200006, lng: -122.40553258899996, heading: 0 },
+  "sf-mission-24th": { lat: 37.777518085000054, lng: -122.412676525, heading: 90 },
+  "sf-marina-chestnut": { lat: 37.77716378000008, lng: -122.40770925099997, heading: 90 },
+  "sf-valencia-mission": { lat: 37.77716378000008, lng: -122.40770925099997, heading: 90 },
+  "sf-hayes-valley": { lat: 37.77674359900004, lng: -122.408239864, heading: 90 },
+  "sf-sunset-irving": { lat: 37.77007049200006, lng: -122.40553258899996, heading: 270 },
+  "sf-financial-montgomery": { lat: 37.77007049200006, lng: -122.40553258899996, heading: 90 },
+  "sf-union-square": { lat: 37.788125336000064, lng: -122.4037439, heading: 0 },
+  "sf-soma-harrison": { lat: 37.779717651000055, lng: -122.40054211699999, heading: 180 },
+  "sf-richmond-geary": { lat: 37.776837224000076, lng: -122.40296556099997, heading: 90 },
+  "sf-dogpatch-3rd": { lat: 37.77007049200006, lng: -122.40553258899996, heading: 90 },
+  "sf-embarcadero-ferry": { lat: 37.779717651000055, lng: -122.40054211699999, heading: 270 },
+};
+
 type DetectionResponse = {
   quad: [[number, number], [number, number], [number, number], [number, number]] | null;
   confidence?: number;
   reason?: string;
   source?: string;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      maps?: {
+        StreetViewPanorama: new (
+          element: HTMLElement,
+          options: Record<string, unknown>
+        ) => GoogleStreetViewPanorama;
+        StreetViewStatus?: { OK: string };
+      };
+    };
+    __biladsGoogleMapsPromise?: Promise<void>;
+  }
+}
+
+type GoogleStreetViewPanorama = {
+  getPov: () => { heading?: number; pitch?: number };
+  addListener: (eventName: string, handler: () => void) => { remove: () => void };
 };
 
 export default function SimulationStreetView({
@@ -28,100 +68,259 @@ export default function SimulationStreetView({
   board: Billboard;
   concept: AdConcept;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const panoRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const [fallback, setFallback] = useState(false);
-  const [status, setStatus] = useState<"loading" | "detecting" | "detected" | "not-found">("loading");
+  const [status, setStatus] = useState<"loading" | "curated" | "not-found">("loading");
 
   useEffect(() => {
     setFallback(false);
     setStatus("loading");
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = panoRef.current;
+    const overlay = overlayRef.current;
+    if (!container || !overlay) return;
+    const containerEl = container;
+    const overlayEl = overlay;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const width = 1280;
-    const height = 720;
-    canvas.width = width;
-    canvas.height = height;
-
-    const heading = streetHeading(board);
-    const camera = offsetPoint(board.lat, board.lng, heading + 180, board.trafficType === "vehicle" ? 22 : 14);
-    const streetUrl =
-      `/api/streetview?lat=${camera.lat.toFixed(7)}&lng=${camera.lng.toFixed(7)}` +
-      `&heading=${heading.toFixed(1)}&pitch=3&fov=74`;
-    const detectionCacheKey = `bilads:detected-billboard:${board.id}:${streetUrl}`;
-
+    const demoView = DEMO_STREET_VIEW[board.id];
+    const heading = demoView?.heading ?? streetHeading(board);
+    const position = demoView
+      ? { lat: demoView.lat, lng: demoView.lng }
+      : offsetPoint(board.lat, board.lng, heading + 180, board.trafficType === "vehicle" ? 22 : 14);
+    const pitch = demoView?.pitch ?? 5;
     let cancelled = false;
-    const street = new Image();
-    street.crossOrigin = "anonymous";
+    let povListener: { remove: () => void } | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
-    street.onload = async () => {
-      if (cancelled) return;
-      drawDetectionPending(ctx, street, width, height);
-      setStatus("detecting");
-
+    async function init() {
       try {
-        const cached = readDetectionCache(detectionCacheKey);
-        const detection = cached ?? (await detectBillboard(canvas, width, height, board.name));
-        if (cancelled) return;
-        if (!cached) writeDetectionCache(detectionCacheKey, detection);
+        await loadGoogleMaps();
+        if (cancelled || !window.google?.maps?.StreetViewPanorama) return;
 
-        if (!detection.quad) {
-          setStatus("not-found");
-          drawNoDetectedBillboard(ctx, street, width, height, detection.reason);
-          return;
-        }
+        const panorama = new window.google.maps.StreetViewPanorama(containerEl, {
+          position,
+          pov: { heading, pitch },
+          zoom: 0,
+          motionTracking: false,
+          motionTrackingControl: false,
+          addressControl: false,
+          fullscreenControl: true,
+          linksControl: true,
+          panControl: true,
+          showRoadLabels: true,
+          zoomControl: true,
+          visible: true,
+        });
 
-        const creative = await loadImage(concept.imageUrl);
-        if (cancelled) return;
-        setStatus("detected");
-        drawDetectedBillboardComposite(ctx, street, creative, concept, width, height, detection.quad);
+        const draw = async () => {
+          const rect = overlayEl.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) return;
+          const quad = boardCornersToQuad(board, rect.width, rect.height);
+          if (!quad) {
+            setStatus("not-found");
+          clearOverlay(overlayEl);
+            return;
+          }
+          const creative = await loadImage(concept.imageUrl);
+          if (cancelled) return;
+          setStatus("curated");
+          drawBillboardOverlay(overlayEl, creative, concept, quad);
+        };
+
+        await draw();
+        resizeObserver = new ResizeObserver(() => void draw());
+        resizeObserver.observe(containerEl);
+        povListener = panorama.addListener("pov_changed", () => {
+          const pov = panorama.getPov();
+          overlayEl.style.opacity = String(1 - Math.min(0.72, angularDiff(pov.heading ?? heading, heading) / 70));
+        });
       } catch {
-        if (cancelled) return;
-        setStatus("not-found");
-        drawNoDetectedBillboard(ctx, street, width, height);
+        if (!cancelled) setFallback(true);
       }
-    };
+    }
 
-    street.onerror = () => {
-      if (cancelled) return;
-      setFallback(true);
-    };
-
-    street.src = streetUrl;
+    void init();
 
     return () => {
       cancelled = true;
+      povListener?.remove();
+      resizeObserver?.disconnect();
+      clearOverlay(overlayEl);
     };
   }, [board, concept]);
 
-  if (fallback) return <Fallback3DMap board={board} concept={concept} />;
+  if (fallback) {
+    return (
+      <div className="relative overflow-hidden rounded-lg border border-bilads-fg/10 bg-black">
+        <canvas
+          ref={(node) => {
+            if (!node) return;
+            drawStaticFallback(node, board, concept);
+          }}
+          className="block aspect-video w-full"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-bilads-fg/10 bg-black">
-      <canvas ref={canvasRef} className="block aspect-video w-full" />
+      <div ref={panoRef} className="aspect-video w-full" />
+      <canvas
+        ref={overlayRef}
+        className="pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-150"
+      />
       <div className="pointer-events-none absolute left-8 top-8 rounded bg-black/78 px-5 py-4 shadow-xl backdrop-blur">
         <p className="text-[15px] font-mono uppercase tracking-[0.32em] text-bilads-accent">
-          Existing Billboard Detection
+          Interactive Street View
         </p>
         <p className="mt-2 text-2xl text-bilads-fg/65">
           {board.name} · {board.neighborhood}
         </p>
         <p className="mt-3 max-w-[520px] text-sm font-mono uppercase tracking-[0.18em] text-bilads-fg/45">
-          {status === "detected"
-            ? "Detected real ad face"
+          {status === "curated"
+            ? "Move around the street scene"
             : status === "not-found"
-              ? "No existing billboard face detected"
-              : "Scanning street scene"}
+              ? "No verified board face for this POV"
+              : "Loading Google Street View"}
         </p>
-      </div>
-      <div className="pointer-events-none absolute bottom-4 right-5 rounded bg-black/55 px-3 py-1 text-[10px] font-mono text-white/70">
-        Street View imagery © Google
       </div>
     </div>
   );
+}
+
+async function loadGoogleMaps(): Promise<void> {
+  if (window.google?.maps?.StreetViewPanorama) return;
+  if (window.__biladsGoogleMapsPromise) return window.__biladsGoogleMapsPromise;
+
+  window.__biladsGoogleMapsPromise = fetch("/api/google-maps-key")
+    .then(async (res) => {
+      if (!res.ok) throw new Error("Google Maps key unavailable");
+      return (await res.json()) as { key: string };
+    })
+    .then(
+      ({ key }) =>
+        new Promise<void>((resolve, reject) => {
+          const existing = document.querySelector<HTMLScriptElement>("script[data-bilads-google-maps]");
+          if (existing) {
+            existing.addEventListener("load", () => resolve(), { once: true });
+            existing.addEventListener("error", () => reject(new Error("Google Maps failed to load")), { once: true });
+            return;
+          }
+          const script = document.createElement("script");
+          script.dataset.biladsGoogleMaps = "true";
+          script.async = true;
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly`;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Google Maps failed to load"));
+          document.head.appendChild(script);
+        })
+    );
+
+  return window.__biladsGoogleMapsPromise;
+}
+
+function boardCornersToQuad(
+  board: Billboard,
+  width: number,
+  height: number
+): [[number, number], [number, number], [number, number], [number, number]] | null {
+  if (!Array.isArray(board.adCorners) || board.adCorners.length !== 4) return null;
+  const refW = 640;
+  const refH = 360;
+  const scaleX = width / refW;
+  const scaleY = height / refH;
+  const quad = board.adCorners.map(([x, y]) => [
+    Math.max(0, Math.min(width, x * scaleX)),
+    Math.max(0, Math.min(height, y * scaleY)),
+  ]) as [[number, number], [number, number], [number, number], [number, number]];
+  const area =
+    0.5 *
+    Math.abs(
+      quad.reduce((sum, [x, y], i) => {
+        const [nx, ny] = quad[(i + 1) % quad.length];
+        return sum + x * ny - nx * y;
+      }, 0)
+    );
+  return area > width * height * 0.002 ? quad : null;
+}
+
+function clearOverlay(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function prepareOverlayCanvas(canvas: HTMLCanvasElement) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  return { ctx, width, height };
+}
+
+function drawBillboardOverlay(
+  canvas: HTMLCanvasElement,
+  creative: HTMLImageElement | undefined,
+  concept: AdConcept,
+  quad: [[number, number], [number, number], [number, number], [number, number]]
+) {
+  const prepared = prepareOverlayCanvas(canvas);
+  if (!prepared) return;
+  const { ctx } = prepared;
+  const corners = quad.map(([x, y]) => ({ x, y })) as [Point, Point, Point, Point];
+  const billboard = renderCreativeCanvas(creative, concept);
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.58)";
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 4;
+  tracePolygon(ctx, corners);
+  ctx.fillStyle = "#050505";
+  ctx.fill();
+  ctx.restore();
+
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(0,0,0,0.86)";
+  tracePolygon(ctx, corners);
+  ctx.stroke();
+  drawPerspectiveImage(ctx, billboard, corners);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  tracePolygon(ctx, corners);
+  ctx.stroke();
+}
+
+function angularDiff(a: number, b: number): number {
+  return Math.abs((((a - b + 540) % 360) + 360) % 360 - 180);
+}
+
+async function drawStaticFallback(canvas: HTMLCanvasElement, board: Billboard, concept: AdConcept) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const width = 1280;
+  const height = 720;
+  canvas.width = width;
+  canvas.height = height;
+
+  const street = await loadImage(board.photo);
+  if (street) drawCover(ctx, street, width, height);
+  else {
+    ctx.fillStyle = "#090909";
+    ctx.fillRect(0, 0, width, height);
+  }
+  drawStreetVignette(ctx, width, height);
+  const quad = boardCornersToQuad(board, width, height);
+  const creative = await loadImage(concept.imageUrl);
+  if (quad && street) drawDetectedBillboardComposite(ctx, street, creative, concept, width, height, quad);
 }
 
 async function detectBillboard(
@@ -163,12 +362,14 @@ function writeDetectionCache(key: string, value: DetectionResponse) {
   } catch {}
 }
 
-function Fallback3DMap({
+function Simulation3DMap({
   board,
   concept,
+  compact = false,
 }: {
   board: Billboard;
   concept: AdConcept;
+  compact?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -272,14 +473,17 @@ function Fallback3DMap({
   }, [board, concept]);
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-bilads-fg/10 bg-black">
-      <div ref={containerRef} className="h-[460px] w-full" />
+    <div className="relative h-full min-h-[320px] overflow-hidden rounded-lg border border-bilads-fg/10 bg-black">
+      <div ref={containerRef} className={compact ? "h-full min-h-[320px] w-full" : "h-[460px] w-full"} />
       <div className="pointer-events-none absolute left-8 top-8 rounded bg-black/78 px-5 py-4 shadow-xl backdrop-blur">
         <p className="text-[15px] font-mono uppercase tracking-[0.32em] text-bilads-accent">
-          3D Map Fallback
+          3D Location Context
         </p>
         <p className="mt-2 text-2xl text-bilads-fg/65">
           {board.name} · {board.neighborhood}
+        </p>
+        <p className="mt-3 max-w-[320px] text-xs font-mono uppercase tracking-[0.16em] text-bilads-fg/40">
+          Interactive map model at selected coordinates
         </p>
       </div>
     </div>

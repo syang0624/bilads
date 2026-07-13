@@ -69,13 +69,15 @@ Dragging Volt awareness→targeted swaps Mission out for Marina and lifts Harris
 that's the on-stage "slider reorders the pins" moment (§13.4). Sunset is deliberately
 low-fit for Volt and never enters its top 3 (stays in the data, not featured — §8).
 
-## ⚠️ adCorners are PLACEHOLDERS — still need real annotation
+## ⚠️ adCorners are demo annotations — still need seller/photo verification
 
-Every board's `adCorners` is a plausible `[TL, TR, BR, BL]` quad for a ~1024-wide
-landscape photo, but they are **not** measured against real photos yet. To finish
-(§ Godson 1:00–2:00):
+The current `/public/billboards/<id>.jpg` assets are Street View frames selected
+for demo visibility, and each board's `adCorners` is an approximate `[TL, TR, BR,
+BL]` quad over the visible ad/sign face in that frame. This is good enough for a
+demo mockup, but still not seller-grade production inventory. To finish (§ Godson
+1:00–2:00):
 
-1. Collect one photo per `id` with a big front-facing rectangular board → save as `/public/billboards/<id>.jpg`.
+1. Collect or license one seller-approved photo per `id` with a big front-facing rectangular board → save as `/public/billboards/<id>.jpg`.
 2. Open each, read the 4 blank-board corner pixels in **TL, TR, BR, BL** order, overwrite `adCorners`.
 3. Hand one photo + corners to Steven for a composite smoke-test before annotating the rest.
 

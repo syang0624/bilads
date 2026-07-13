@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Circle, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import type { Billboard, HeatmapPoint } from "@/lib/types";
@@ -98,68 +98,88 @@ export default function MapView({
 }) {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showBlobs, setShowBlobs] = useState(true);
+  const mapKey = useMemo(
+    () => boards.map((board) => `${board.id}:${board.lat.toFixed(5)}:${board.lng.toFixed(5)}`).join("|"),
+    [boards]
+  );
+  const [mountedMapKey, setMountedMapKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMountedMapKey(null);
+    const frame = window.requestAnimationFrame(() => setMountedMapKey(mapKey));
+    return () => window.cancelAnimationFrame(frame);
+  }, [mapKey]);
 
   return (
     // z-0 opens a stacking context so Leaflet's internal panes (z-index
     // 400-700) can't paint over sibling overlays like the floating info card.
     <div className="w-full h-full relative z-0">
-      <MapContainer
-        center={[37.775, -122.418]}
-        zoom={13}
-        className="w-full h-full"
-        zoomControl={false}
-        style={{ background: "#1a1a1a" }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
-        <FitBounds boards={boards} />
-        <HeatmapLayer visible={showHeatmap} />
-        {/* Opportunity blobs — ICP-matched account clusters (Peel-style ABM) */}
-        {showBlobs &&
-          blobs.map((blob, i) => (
-            <Circle
-              key={`blob-${i}`}
-              center={[blob.lat, blob.lng]}
-              radius={blob.radiusM}
-              pathOptions={{
-                color: "#F5D400",
-                weight: 1,
-                opacity: 0.5,
-                fillColor: "#F5D400",
-                fillOpacity: 0.12,
-                dashArray: "6 6",
-              }}
-            >
-              <Tooltip direction="top" opacity={0.95}>
-                <div style={{ fontFamily: "monospace", fontSize: 11 }}>
-                  <strong>
-                    {blob.count} target accounts — {blob.label}
-                  </strong>
-                  <br />
-                  {blob.sampleNames.join(" · ")}
-                </div>
-              </Tooltip>
-            </Circle>
-          ))}
-        {boards.map((board, i) => {
-          const rank = i + 1;
-          return (
-            <Marker
-              key={board.id}
-              position={[board.lat, board.lng]}
-              icon={createPinIcon(rank, selectedBoard === board.id)}
-              eventHandlers={{
-                click: () =>
-                  onSelectBoard(
-                    selectedBoard === board.id ? null : board.id
-                  ),
-              }}
-            />
-          );
-        })}
-      </MapContainer>
+      {mountedMapKey ? (
+        <MapContainer
+          key={mountedMapKey}
+          center={[37.775, -122.418]}
+          zoom={13}
+          className="w-full h-full"
+          zoomControl={false}
+          style={{ background: "#1a1a1a" }}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+          <FitBounds boards={boards} />
+          <HeatmapLayer visible={showHeatmap} />
+          {/* Opportunity blobs — ICP-matched account clusters (Peel-style ABM) */}
+          {showBlobs &&
+            blobs.map((blob, i) => (
+              <Circle
+                key={`blob-${i}`}
+                center={[blob.lat, blob.lng]}
+                radius={blob.radiusM}
+                pathOptions={{
+                  color: "#F5D400",
+                  weight: 1,
+                  opacity: 0.5,
+                  fillColor: "#F5D400",
+                  fillOpacity: 0.12,
+                  dashArray: "6 6",
+                }}
+              >
+                <Tooltip direction="top" opacity={0.95}>
+                  <div style={{ fontFamily: "monospace", fontSize: 11 }}>
+                    <strong>
+                      {blob.count} target accounts — {blob.label}
+                    </strong>
+                    <br />
+                    {blob.sampleNames.join(" · ")}
+                  </div>
+                </Tooltip>
+              </Circle>
+            ))}
+          {boards.map((board, i) => {
+            const rank = i + 1;
+            return (
+              <Marker
+                key={board.id}
+                position={[board.lat, board.lng]}
+                icon={createPinIcon(rank, selectedBoard === board.id)}
+                eventHandlers={{
+                  click: () =>
+                    onSelectBoard(
+                      selectedBoard === board.id ? null : board.id
+                    ),
+                }}
+              />
+            );
+          })}
+        </MapContainer>
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-[#1a1a1a]">
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-bilads-fg/35">
+            Loading map
+          </p>
+        </div>
+      )}
 
       {/* Heatmap toggle */}
       <button
