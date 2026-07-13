@@ -113,8 +113,8 @@ Godson owns all data that flows into the system: billboard records, audience tag
   }
   ```
 - [x] Store Nimble results in `data/nimble-signals/<boardId>.json` (13/14 from real Google Places data via `scripts/gen-nimble-signals.mjs`; live Nimble API augments)
-- [ ] Pipe Nimble signals into the Research Agent's context so they influence recommendations (BACKEND — Noriaki wires into /api/research)
-- [ ] Wire live Nimble API for web-search/events/reviews (BLOCKED — needs NIMBLE_API_KEY)
+- [x] Pipe Nimble signals into the Research Agent's context so they influence recommendations (app/lib/nimble.ts → researcher prompt; `[Nimble] `-prefixed findings for UI badges)
+- [x] Wire live Nimble API for web-search/events/reviews (`scripts/nimble-live-enrich.mjs` — Nimble CLI news-focus search per board; merges live signals + source_urls into `data/nimble-signals/`, idempotent re-runs)
 - [ ] **Key demo point:** Show that Nimble intelligence changes the recommendation vs. static data alone
 
 ### Sponsor: InsForge Data Storage
