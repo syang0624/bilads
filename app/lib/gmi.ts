@@ -9,11 +9,21 @@ import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 const GMI_BASE_URL = process.env.GMI_BASE_URL ?? "https://api.gmi-serving.com/v1";
-// Model IDs come from Godson — override in .env.local once confirmed.
-export const CHAT_MODEL = process.env.GMI_CHAT_MODEL ?? "deepseek-ai/DeepSeek-V3";
-export const IMAGE_MODEL = process.env.GMI_IMAGE_MODEL ?? "black-forest-labs/FLUX.1-schnell";
+// Media (image gen) lives on a separate async request-queue API, not the
+// OpenAI-compatible serving cluster — confirmed by Godson against live GMI.
+const GMI_MEDIA_URL =
+  process.env.GMI_MEDIA_URL ??
+  "https://console.gmicloud.ai/api/v1/ie/requestqueue/apikey/requests";
+// Model IDs confirmed by Godson against the live API (2026-07-13):
+//   chat  google/gemini-3.5-flash — ~2.6s, strict JSON clean, vision-capable
+//   image gemini-3.1-flash-image  — ~17s, PNG via request queue, 16:9 only
+export const CHAT_MODEL = process.env.GMI_CHAT_MODEL ?? "google/gemini-3.5-flash";
+export const IMAGE_MODEL = process.env.GMI_IMAGE_MODEL ?? "gemini-3.1-flash-image";
 
 export const GMI_TIMEOUT_MS = 20_000;
+// Image gen runs ~17s on GMI's queue — 20s leaves no headroom, so images get
+// their own budget. /api/generate still falls back to placeholders on expiry.
+export const GMI_IMAGE_TIMEOUT_MS = 45_000;
 
 export class GmiUnavailableError extends Error {}
 
@@ -50,31 +60,61 @@ export async function chat(messages: ChatMessage[], model: string = CHAT_MODEL):
   return text;
 }
 
+/** Gemini-style media response from GMI's request queue. */
+interface MediaQueueResponse {
+  status?: string;
+  error?: string;
+  outcome?: {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          text?: string;
+          inlineData?: { mimeType?: string; data?: string };
+          inline_data?: { mime_type?: string; data?: string };
+        }>;
+      };
+    }>;
+  };
+}
+
 /**
- * One image generation; returns raw PNG/JPEG bytes. Times out after 20s.
- * 1024x512 is the wide billboard ratio (PRD §5); GMI snaps to nearest supported.
+ * One image generation; returns raw PNG bytes. Times out after 45s.
+ *
+ * NOTE: GMI serves image models on the console request-queue API, NOT the
+ * OpenAI-compatible cluster (/images/generations 404s: "No matching target
+ * server"). The queue responds synchronously (~17s) with a Gemini-style
+ * candidates/parts payload. Aspect ratio must be one of Gemini's supported
+ * set — "2:1" is rejected, so we use 16:9 (closest to the PRD's 1024x512
+ * wide-billboard ratio; the composite warp absorbs the difference).
  */
 export async function image(
   prompt: string,
   model: string = IMAGE_MODEL,
-  size: string = "1024x512"
+  aspectRatio: string = "16:9"
 ): Promise<Buffer> {
+  const apiKey = process.env.GMI_API_KEY;
+  if (!apiKey) throw new GmiUnavailableError("GMI_API_KEY not set");
   const res = await withTimeout(
-    gmi().images.generate({
-      model,
-      prompt,
-      n: 1,
-      size: size as never,
-      response_format: "b64_json",
-    })
+    fetch(GMI_MEDIA_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        payload: { prompt, aspect_ratio: aspectRatio },
+      }),
+    }),
+    GMI_IMAGE_TIMEOUT_MS
   );
-  const b64 = res.data?.[0]?.b64_json;
-  if (b64) return Buffer.from(b64, "base64");
-  const url = res.data?.[0]?.url;
-  if (url) {
-    const dl = await withTimeout(fetch(url));
-    if (!dl.ok) throw new Error(`image download failed: ${dl.status}`);
-    return Buffer.from(await dl.arrayBuffer());
+  if (!res.ok) throw new Error(`GMI media queue HTTP ${res.status}`);
+  const body = (await res.json()) as MediaQueueResponse;
+  if (body.error) throw new Error(`GMI media queue: ${body.error}`);
+  const parts = body.outcome?.candidates?.[0]?.content?.parts ?? [];
+  for (const part of parts) {
+    const inline = part.inlineData ?? part.inline_data;
+    if (inline?.data) return Buffer.from(inline.data, "base64");
   }
-  throw new Error("GMI image returned neither b64_json nor url");
+  throw new Error(`GMI image returned no inline image data (status: ${body.status})`);
 }

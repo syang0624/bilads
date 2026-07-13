@@ -6,13 +6,22 @@ Godson owns all data that flows into the system: billboard records, audience tag
 
 ---
 
-## Phase 0: Setup — GMI Cloud (0:00-0:15)
+## Phase 0: Setup — GMI Cloud (0:00-0:15) — ✅ DONE
 
-- [ ] Log into GMI Cloud playground; confirm API key works
-- [ ] Pick one LLM — test vision capability (upload an image + text prompt; if it returns coherent description, we use vision; if not or too slow, go text-only)
-- [ ] Pick one image model — test with: `"wide-format billboard ad for e-bike, urban commuter tone, no text, 1024x512"`; confirm quality + latency
-- [ ] Post exact model IDs to team chat and paste into `lib/gmi.ts` constants
-- [ ] Document model choices: name, latency, quality notes, any quirks
+- [x] API key confirmed working (74 chat models listed)
+- [x] LLM picked: **`google/gemini-3.5-flash`** — ~2.6s, clean strict JSON, vision-capable
+- [x] Image model picked: **`gemini-3.1-flash-image`** — ~17s/image, excellent quality
+- [x] Model IDs in `app/lib/gmi.ts` defaults + `.env.example` + `.env`
+- [x] Documented quirks:
+  - `deepseek-ai/DeepSeek-V3` (old default) does NOT exist on the cluster → 404
+  - Image models are NOT on the OpenAI-compatible cluster — `/images/generations`
+    404s ("No matching target server"). They live on the async request queue at
+    `console.gmicloud.ai/api/v1/ie/requestqueue/apikey/requests` (responds
+    synchronously ~17s, Gemini-style `candidates/parts` payload). `image()` in
+    `app/lib/gmi.ts` handles this.
+  - Aspect ratio `2:1` is REJECTED; use `16:9` (composite warp absorbs the diff)
+  - Image calls need their own timeout (45s) — 17s gen vs the 20s chat timeout
+  - Next.js only reads env from `app/` → `app/.env.local` is a symlink to root `.env`
 
 ---
 
