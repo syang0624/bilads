@@ -56,3 +56,18 @@ CLAUDE.md
 AGENTS.md
 .claude/
 .codex/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

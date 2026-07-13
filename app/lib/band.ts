@@ -95,7 +95,7 @@ export async function startRoom(context: BandContext): Promise<BandRoom> {
     void recordAgentMessage({ roomId, ...msg }); // persisted thread (InsForge)
   };
 
-  const { brief, researcher, mediaBuyer, boardId, concepts } = context;
+  const { brief, mediaBuyer, boardId, concepts } = context;
   const board = boardId ? getBoard(boardId) : undefined;
   const topId = boardId ?? mediaBuyer?.top3[0];
   const topBoard = board ?? (topId ? getBoard(topId) : undefined);

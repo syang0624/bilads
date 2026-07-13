@@ -981,8 +981,10 @@ export default function ResultsPage() {
           {/* BAND discussion */}
           {research && agentPhase >= 2 && (
             <BandDiscussion
+              brief={brief}
               research={research}
               topBoards={top3Boards}
+              campaignWeeks={campaign.campaignWeeks}
               visible={showBand}
               onToggle={() => setShowBand((v) => !v)}
             />
