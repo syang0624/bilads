@@ -13,7 +13,14 @@
  * The frontend renders room.messages as a conversation.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { startRoom, decideRoom, getRoom, listRooms, type BandContext } from "@/lib/band";
+import {
+  startRoom,
+  decideRoom,
+  getRoom,
+  listRooms,
+  type BandContext,
+  type BandRoom,
+} from "@/lib/band";
 
 export const runtime = "nodejs";
 
@@ -29,10 +36,29 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
 interface BandPost {
   action: "start" | "approve" | "reject";
+  requestId?: string;
   context?: BandContext;
   roomId?: string;
   decidedBy?: string;
   note?: string;
+}
+
+// React Strict Mode can repeat an effect in development. Band does not expose
+// an idempotency header, so deduplicate room creation at this application edge.
+const startRequests = new Map<string, Promise<BandRoom>>();
+
+function startRoomOnce(requestId: string | undefined, context: BandContext) {
+  if (!requestId) return startRoom(context);
+  const existing = startRequests.get(requestId);
+  if (existing) return existing;
+
+  const created = startRoom(context);
+  startRequests.set(requestId, created);
+  if (startRequests.size > 100) {
+    const oldest = startRequests.keys().next().value as string | undefined;
+    if (oldest && oldest !== requestId) startRequests.delete(oldest);
+  }
+  return created;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -47,7 +73,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!body.context?.brief?.productName) {
       return NextResponse.json({ error: "context.brief.productName is required" }, { status: 400 });
     }
-    return NextResponse.json(await startRoom(body.context));
+    if (body.requestId && body.requestId.length > 128) {
+      return NextResponse.json({ error: "requestId is too long" }, { status: 400 });
+    }
+    const context = {
+      ...body.context,
+      brief: {
+        productName: body.context.brief.productName,
+        description: body.context.brief.description,
+        audience: body.context.brief.audience,
+      },
+    };
+    return NextResponse.json(await startRoomOnce(body.requestId, context));
   }
 
   if (body.action === "approve" || body.action === "reject") {

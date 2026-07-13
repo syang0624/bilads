@@ -1,157 +1,167 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import type { ResearchResponse, Billboard } from "@/lib/types";
+import { useEffect, useState } from "react";
+import type {
+  Billboard,
+  ProductBrief,
+  ResearchResponse,
+} from "@/lib/types";
 
 interface BandMessage {
   agent: string;
   role: string;
-  emoji: string;
   message: string;
-  type: "finding" | "recommendation" | "warning" | "approval";
+  timestamp: string;
+  action?: string;
 }
 
-function generateBandMessages(
-  research: ResearchResponse,
-  topBoards: Billboard[]
-): BandMessage[] {
-  const messages: BandMessage[] = [];
-  const { researcher, mediaBuyer } = research;
+interface BandRoom {
+  roomId: string;
+  status: "discussing" | "awaiting_approval" | "approved" | "rejected";
+  messages: BandMessage[];
+  integration: {
+    mode: "live" | "fallback";
+    remoteRoomId?: string;
+    warning?: string;
+  };
+}
 
-  // Research Agent posts findings
-  messages.push({
-    agent: "Research Agent",
-    role: "Market Intelligence",
-    emoji: "🔍",
-    message: `Target audience identified: ${researcher.audienceProfile.ageRange}, income ${researcher.audienceProfile.income}. Key interests: ${researcher.audienceProfile.interests.slice(0, 4).join(", ")}.`,
-    type: "finding",
-  });
+type MessageType = "finding" | "recommendation" | "warning" | "approval";
 
-  messages.push({
-    agent: "Research Agent",
-    role: "Market Intelligence",
-    emoji: "🔍",
-    message: `Buying triggers: ${researcher.buyingTriggers.join("; ")}. Recommend ${researcher.adToneGuidance.split(".")[0].toLowerCase()}.`,
-    type: "finding",
-  });
-
-  // Media Planner explains reasoning
-  if (topBoards.length > 0) {
-    const board1 = topBoards[0];
-    const ranking1 = mediaBuyer.rankings.find((r) => r.id === board1.id);
-    messages.push({
-      agent: "Media Planner",
-      role: "Channel Strategy",
-      emoji: "📊",
-      message: `Top recommendation: ${board1.name} in ${board1.neighborhood}. ${board1.dailyImpressions.toLocaleString()} daily impressions, ${board1.trafficType} traffic. Demo match: ${ranking1 ? Math.round(ranking1.demoMatch * 100) : 0}%.`,
-      type: "recommendation",
-    });
-  }
-
-  if (topBoards.length > 1) {
-    messages.push({
-      agent: "Media Planner",
-      role: "Channel Strategy",
-      emoji: "📊",
-      message: `Secondary locations: ${topBoards.slice(1).map((b) => `${b.name} (${b.neighborhood})`).join(", ")}. Budget allows all ${topBoards.length} placements simultaneously.`,
-      type: "recommendation",
-    });
-  }
-
-  // Creative Director
-  const spanishBoard = topBoards.find((b) => b.spanishFriendly);
-  messages.push({
-    agent: "Creative Director",
-    role: "Campaign Creative",
-    emoji: "🎨",
-    message: spanishBoard
-      ? `${spanishBoard.neighborhood} has ${spanishBoard.demographics.hispanicSharePct}% Hispanic population. Recommend bilingual EN/ES concepts for ${spanishBoard.name}. Other locations get dual English concepts with neighborhood-tailored copy.`
-      : `All locations receive dual English concepts. Adapting visual tone to each neighborhood's character — viewing distance and dwell time (${topBoards[0]?.avgDwellSeconds || 6}s avg) dictate headline length.`,
-    type: "recommendation",
-  });
-
-  // Performance Analyst
-  if (topBoards.length > 0) {
-    const totalImpressions = topBoards.reduce(
-      (sum, b) => sum + b.dailyImpressions * 7,
-      0
-    );
-    messages.push({
-      agent: "Performance Analyst",
-      role: "Campaign Metrics",
-      emoji: "📈",
-      message: `Projected weekly reach across ${topBoards.length} locations: ${totalImpressions.toLocaleString()} impressions. Blended CPM estimate pending creative quality assessment.`,
-      type: "finding",
-    });
-  }
-
-  // Risk Agent
-  messages.push({
-    agent: "Risk Agent",
-    role: "Brand Safety",
-    emoji: "🛡️",
-    message: `All placements cleared. No sensitive category conflicts. Reminder: generated visuals must not contain fabricated claims, logos, or pricing. Text overlays use approved copy only.`,
-    type: "warning",
-  });
-
-  if (spanishBoard) {
-    messages.push({
-      agent: "Risk Agent",
-      role: "Brand Safety",
-      emoji: "🛡️",
-      message: `Spanish copy for ${spanishBoard.name}: verify localization reads naturally (SF Mission Spanglish acceptable). Reject direct translations that sound robotic.`,
-      type: "warning",
-    });
-  }
-
-  // Human approval
-  messages.push({
-    agent: "Human",
-    role: "Campaign Owner",
-    emoji: "👤",
-    message: `Approve top ${topBoards.length} locations. Proceed with creative generation.`,
-    type: "approval",
-  });
-
-  return messages;
+function messageStyle(message: BandMessage): {
+  emoji: string;
+  type: MessageType;
+} {
+  if (message.agent === "Human") return { emoji: "👤", type: "approval" };
+  if (message.agent.includes("Research")) return { emoji: "🔍", type: "finding" };
+  if (message.agent.includes("Media")) return { emoji: "📊", type: "recommendation" };
+  if (message.agent.includes("Creative")) return { emoji: "🎨", type: "recommendation" };
+  if (message.agent.includes("Performance")) return { emoji: "📈", type: "finding" };
+  return { emoji: "🛡️", type: "warning" };
 }
 
 export default function BandDiscussion({
+  brief,
   research,
   topBoards,
+  campaignWeeks,
   visible,
   onToggle,
 }: {
+  brief: ProductBrief;
   research: ResearchResponse;
   topBoards: Billboard[];
+  campaignWeeks: number;
   visible: boolean;
   onToggle: () => void;
 }) {
+  const [room, setRoom] = useState<BandRoom | null>(null);
   const [visibleCount, setVisibleCount] = useState(0);
-  const messages = generateBandMessages(research, topBoards);
+  const [loading, setLoading] = useState(false);
+  const [deciding, setDeciding] = useState<"approve" | "reject" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [requestId] = useState(() => crypto.randomUUID());
+  const topBoardId = topBoards[0]?.id;
+  const messageCount = room?.messages.length ?? 0;
 
   useEffect(() => {
-    if (!visible) {
-      setVisibleCount(0);
-      return;
-    }
-    setVisibleCount(0);
-    let count = 0;
+    if (!visible || room) return;
+
+    const controller = new AbortController();
+
+    fetch("/api/band", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "start",
+        requestId,
+        context: {
+          brief,
+          researcher: research.researcher,
+          mediaBuyer: research.mediaBuyer,
+          boardId: topBoardId,
+          campaignWeeks,
+        },
+      }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as BandRoom | { error?: string };
+        if (!response.ok) {
+          throw new Error("error" in body && body.error ? body.error : "BAND request failed");
+        }
+        setRoom(body as BandRoom);
+      })
+      .catch((requestError: unknown) => {
+        if (requestError instanceof Error && requestError.name === "AbortError") return;
+        setError(requestError instanceof Error ? requestError.message : "BAND request failed");
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, [
+    visible,
+    room,
+    brief,
+    research,
+    topBoardId,
+    campaignWeeks,
+    requestId,
+    retryNonce,
+  ]);
+
+  useEffect(() => {
+    if (!visible || messageCount === 0) return;
     const interval = setInterval(() => {
-      count++;
-      if (count > messages.length) {
-        clearInterval(interval);
-        return;
-      }
-      setVisibleCount(count);
-    }, 800);
+      setVisibleCount((current) => {
+        if (current >= messageCount) {
+          clearInterval(interval);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 600);
     return () => clearInterval(interval);
-  }, [visible, messages.length]);
+  }, [visible, messageCount]);
+
+  async function decide(action: "approve" | "reject") {
+    if (!room || deciding) return;
+    setDeciding(action);
+    setError(null);
+    try {
+      const response = await fetch("/api/band", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          roomId: room.roomId,
+          decidedBy: "Bilads campaign owner",
+        }),
+      });
+      const body = (await response.json()) as BandRoom | { error?: string };
+      if (!response.ok) {
+        throw new Error("error" in body && body.error ? body.error : "Decision failed");
+      }
+      const updated = body as BandRoom;
+      setRoom(updated);
+      setVisibleCount(updated.messages.length);
+    } catch (decisionError) {
+      setError(decisionError instanceof Error ? decisionError.message : "Decision failed");
+    } finally {
+      setDeciding(null);
+    }
+  }
 
   if (!visible) {
     return (
       <button
-        onClick={onToggle}
+        onClick={() => {
+          setLoading(true);
+          setError(null);
+          setVisibleCount(0);
+          onToggle();
+        }}
         className="w-full text-left bg-bilads-surface/50 border border-bilads-fg/10 rounded-lg p-3 text-xs font-mono text-bilads-fg/40 hover:text-bilads-fg/60 hover:border-bilads-fg/20 transition-colors"
       >
         View agent discussion →
@@ -168,49 +178,121 @@ export default function BandDiscussion({
         <button
           onClick={onToggle}
           className="text-xs text-bilads-fg/40 hover:text-bilads-fg"
+          aria-label="Close BAND discussion"
         >
           &times;
         </button>
       </div>
-      <div className="max-h-80 overflow-y-auto p-3 space-y-3">
-        {messages.slice(0, visibleCount).map((msg, i) => (
-          <div
-            key={i}
-            className={`flex gap-2 animate-fade-in ${
-              msg.type === "approval" ? "bg-bilads-accent/5 rounded-lg p-2 -mx-1" : ""
-            }`}
+
+      {loading && !room && (
+        <div className="p-3 flex items-center gap-2 text-bilads-fg/40">
+          <div className="w-1.5 h-1.5 bg-bilads-accent rounded-full animate-pulse" />
+          <span className="text-[10px] font-mono">Creating BAND room...</span>
+        </div>
+      )}
+
+      {error && !room && (
+        <div className="p-3 text-xs text-red-300/80">
+          <p>{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              setRetryNonce((value) => value + 1);
+            }}
+            className="mt-2 text-[10px] font-mono text-bilads-accent hover:underline"
           >
-            <span className="text-sm flex-shrink-0">{msg.emoji}</span>
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={`text-xs font-bold ${
-                    msg.type === "warning"
-                      ? "text-orange-400"
-                      : msg.type === "approval"
-                        ? "text-bilads-accent"
-                        : "text-bilads-fg/80"
+            Retry
+          </button>
+        </div>
+      )}
+
+      {room && (
+        <>
+          <div className="px-3 pt-2 flex items-center gap-2 text-[9px] font-mono">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                room.integration.mode === "live" ? "bg-green-400" : "bg-amber-400"
+              }`}
+            />
+            <span className="text-bilads-fg/35">
+              {room.integration.mode === "live" ? "LIVE BAND ROOM" : "LOCAL FALLBACK"}
+            </span>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto p-3 space-y-3">
+            {room.messages.slice(0, visibleCount).map((message, index) => {
+              const presentation = messageStyle(message);
+              return (
+                <div
+                  key={`${message.timestamp}-${index}`}
+                  className={`flex gap-2 animate-fade-in ${
+                    presentation.type === "approval"
+                      ? "bg-bilads-accent/5 rounded-lg p-2 -mx-1"
+                      : ""
                   }`}
                 >
-                  {msg.agent}
-                </span>
-                <span className="text-[10px] text-bilads-fg/30 font-mono">
-                  {msg.role}
-                </span>
+                  <span className="text-sm flex-shrink-0">{presentation.emoji}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className={`text-xs font-bold ${
+                          presentation.type === "warning"
+                            ? "text-orange-400"
+                            : presentation.type === "approval"
+                              ? "text-bilads-accent"
+                              : "text-bilads-fg/80"
+                        }`}
+                      >
+                        {message.agent}
+                      </span>
+                      <span className="text-[10px] text-bilads-fg/30 font-mono">
+                        {message.role}
+                      </span>
+                    </div>
+                    <p className="text-xs text-bilads-fg/60 mt-0.5 leading-relaxed">
+                      {message.message}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+
+            {visibleCount < room.messages.length && (
+              <div className="flex items-center gap-2 text-bilads-fg/30">
+                <div className="w-1.5 h-1.5 bg-bilads-accent rounded-full animate-pulse" />
+                <span className="text-[10px] font-mono">Agents deliberating...</span>
               </div>
-              <p className="text-xs text-bilads-fg/60 mt-0.5 leading-relaxed">
-                {msg.message}
+            )}
+
+            {visibleCount >= room.messages.length && room.status === "awaiting_approval" && (
+              <div className="pt-2 border-t border-bilads-fg/10 flex gap-2">
+                <button
+                  onClick={() => decide("approve")}
+                  disabled={Boolean(deciding)}
+                  className="flex-1 rounded bg-bilads-accent/15 px-2 py-1.5 text-[10px] font-mono text-bilads-accent hover:bg-bilads-accent/25 disabled:opacity-50"
+                >
+                  {deciding === "approve" ? "Approving..." : "Approve plan"}
+                </button>
+                <button
+                  onClick={() => decide("reject")}
+                  disabled={Boolean(deciding)}
+                  className="flex-1 rounded bg-red-400/10 px-2 py-1.5 text-[10px] font-mono text-red-300 hover:bg-red-400/20 disabled:opacity-50"
+                >
+                  {deciding === "reject" ? "Rejecting..." : "Request revision"}
+                </button>
+              </div>
+            )}
+
+            {error && <p className="text-[10px] text-red-300/80">{error}</p>}
+            {room.integration.warning && (
+              <p className="text-[9px] leading-relaxed text-amber-300/60">
+                {room.integration.warning}
               </p>
-            </div>
+            )}
           </div>
-        ))}
-        {visibleCount < messages.length && (
-          <div className="flex items-center gap-2 text-bilads-fg/30">
-            <div className="w-1.5 h-1.5 bg-bilads-accent rounded-full animate-pulse" />
-            <span className="text-[10px] font-mono">Agents deliberating...</span>
-          </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ interface BandAgentProfile {
   id: string;
   name: string;
   handle: string;
+  owner_uuid: string;
 }
 
 interface BandAgentCredential {
@@ -143,6 +144,10 @@ async function loadAgents(): Promise<BandAgentCredential[]> {
   if (uniqueIds.size !== agents.length) {
     throw new Error("Each Band specialist must use a different registered agent API key");
   }
+  const ownerIds = new Set(agents.map(({ profile }) => profile.owner_uuid));
+  if (ownerIds.size !== 1) {
+    throw new Error("All five Band specialists must be sibling agents with the same owner");
+  }
 
   return agents;
 }
@@ -181,6 +186,7 @@ export async function publishBandRoom(
 ): Promise<BandLiveRoom> {
   const agents = await loadAgents();
   const coordinator = agents[0];
+  const safeProductName = productName.replace(/[\0\r\n]/g, " ").trim() || "Campaign";
 
   const created = await bandRequest<BandEnvelope<CreatedChat>>(
     "/chats",
@@ -188,18 +194,21 @@ export async function publishBandRoom(
     {
       method: "POST",
       body: JSON.stringify({
-        chat: { title: `Bilads approval — ${productName}`.slice(0, 120) },
+        chat: { title: `Bilads approval — ${safeProductName}`.slice(0, 120) },
       }),
     }
   );
   const roomId = created.data.id;
 
   await Promise.all(
-    agents.slice(1).map(({ profile }) =>
+    [
+      coordinator.profile.owner_uuid,
+      ...agents.slice(1).map(({ profile }) => profile.id),
+    ].map((participantId) =>
       bandRequest(`/chats/${roomId}/participants`, coordinator.apiKey, {
         method: "POST",
         body: JSON.stringify({
-          participant: { participant_id: profile.id, role: "member" },
+          participant: { participant_id: participantId, role: "member" },
         }),
       })
     )
