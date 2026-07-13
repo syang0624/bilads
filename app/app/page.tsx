@@ -288,13 +288,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Orangeboard: seller-facing cockpit (board owner → ranked advertisers) */}
+        {/* Voyagent: seller-facing cockpit (board owner → ranked advertisers) */}
         <p className="text-center pt-10">
           <a
             href="/map"
             className="font-mono text-xs text-bilads-fg/25 hover:text-bilads-fg/60 transition-colors"
           >
-            Seller cockpit →
+            Voyagent cockpit →
           </a>
         </p>
       </div>

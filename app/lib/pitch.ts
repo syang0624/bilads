@@ -56,7 +56,7 @@ export async function draftPitch(input: PitchInput): Promise<PitchResult> {
           input.visibilitySummary
             ? `Visibility proof point: ${input.visibilitySummary}`
             : "Visibility proof point: the board sits on a mapped high-exposure SF traffic corridor (modeled from city traffic data).",
-          "Sign off as 'The Orangeboard team'.",
+          "Sign off as 'The Voyagent team'.",
         ]
           .filter(Boolean)
           .join("\n"),
@@ -87,7 +87,7 @@ function fallbackPitch(input: PitchInput, location: string): PitchResult {
       `As a ${input.category.toLowerCase()} business, your customers already pass this board every day: ${visibility}. ` +
       `We put together a creative mockup showing your name on the board so you can see exactly how it would look. ` +
       `Want a link? Reply and we'll send it over, along with straightforward pricing.\n\n` +
-      `— The Orangeboard team`,
+      `— The Voyagent team`,
     source: "fallback",
   };
 }

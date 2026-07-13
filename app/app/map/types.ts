@@ -134,7 +134,7 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Shared monospace micro-label style — the Orangeboard console voice. */
+/** Shared monospace micro-label style for the Voyagent console voice. */
 export const MONO_LABEL: CSSProperties = {
   fontFamily:
     'ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", monospace',
@@ -143,5 +143,5 @@ export const MONO_LABEL: CSSProperties = {
   letterSpacing: "0.12em",
 };
 
-export const ORANGE = "#f97316";
+export const ORANGE = "#F5D400";
 export const INACTIVE = "#737373";

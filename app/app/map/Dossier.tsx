@@ -131,7 +131,7 @@ function InventoryTab({ board, hasBiz }: { board: BoardSel; hasBiz: boolean | nu
             target="_blank"
             rel="noopener noreferrer"
             style={{ ...MONO_LABEL, color: ORANGE, border: `1px solid ${ORANGE}66` }}
-            className="px-2 py-1.5 hover:bg-orange-50 transition-colors"
+            className="px-2 py-1.5 hover:bg-yellow-50 transition-colors"
           >
             Open city permit ↗
           </a>
@@ -244,7 +244,7 @@ function ActionBtn({
         border: "1px solid rgba(0,0,0,0.14)",
         cursor: busy || done ? "default" : "pointer",
       }}
-      className="px-1.5 py-1 hover:border-orange-400 hover:text-orange-500 transition-colors disabled:hover:border-neutral-200"
+      className="px-1.5 py-1 hover:border-yellow-400 hover:text-yellow-600 transition-colors disabled:hover:border-neutral-200"
     >
       {busy ? "…" : done ? "✓ " + label : label}
     </button>
@@ -480,7 +480,7 @@ export default function Dossier({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "orangeboard-queue.csv";
+    a.download = "voyagent-queue.csv";
     a.click();
     URL.revokeObjectURL(url);
   }, [queue]);
@@ -490,7 +490,7 @@ export default function Dossier({
   const hasBiz = advState?.status === "done" ? advState.data.totalNearby > 0 : null;
 
   const title =
-    mode === "QUEUE" ? "Orange Slice queue" : board ? board.address.toLowerCase() : "dossier";
+    mode === "QUEUE" ? "Voyagent queue" : board ? board.address.toLowerCase() : "dossier";
 
   return (
     <div
@@ -556,7 +556,7 @@ export default function Dossier({
 
         {mode !== "QUEUE" && !board && (
           <p style={{ ...MONO_LABEL, color: "#a3a3a3" }} className="py-6 text-center">
-            Select an orange sign on the map to open its dossier.
+            Select a highlighted sign on the map to open its dossier.
           </p>
         )}
       </div>
@@ -708,7 +708,7 @@ function QueueTab({
         <button
           onClick={onExport}
           style={{ ...MONO_LABEL, fontSize: "8px", color: ORANGE, border: `1px solid ${ORANGE}66` }}
-          className="px-2 py-1 hover:bg-orange-50 transition-colors"
+          className="px-2 py-1 hover:bg-yellow-50 transition-colors"
         >
           Export CSV
         </button>
@@ -728,7 +728,7 @@ function QueueTab({
             {queue.map((q, i) => (
               <tr key={`${q.recordId}:${q.advertiserName}`} style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
                 <td className="py-1.5 pr-2 align-top">
-                  <button onClick={() => onJump(q.recordId)} className="text-left hover:text-orange-500 transition-colors" title={q.address}>
+                  <button onClick={() => onJump(q.recordId)} className="text-left hover:text-yellow-600 transition-colors" title={q.address}>
                     {q.recordId}
                     <br />
                     <span className="text-neutral-400">{q.address.slice(0, 22)}</span>

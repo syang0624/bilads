@@ -1,9 +1,9 @@
 /**
- * Orangeboard /map — seller cockpit orchestrator.
+ * Voyagent /map — seller cockpit orchestrator.
  *
  * Owns the MapLibre map (dark OpenFreeMap style, 3D building extrusions, 559
- * GASP permit signs as orange dots) plus all cross-panel state: selected
- * board, cockpit mode, clock, Open-Meteo weather, and the Orange Slice queue
+ * GASP permit signs as accent dots) plus all cross-panel state: selected
+ * board, cockpit mode, clock, Open-Meteo weather, and the Voyagent queue
  * (localStorage-persisted). Cockpit.tsx and Dossier.tsx are dumb children.
  *
  * Failure chain — the map never dead-ends:
@@ -212,8 +212,8 @@ export default function OrangeboardMap() {
                   "interpolate", ["linear"], ["zoom"],
                   11, 9, 14, 12, 16, 16,
                 ],
-                "circle-color": "rgba(249,115,22,0.15)",
-                "circle-stroke-color": "#f97316",
+                "circle-color": "rgba(245,212,0,0.16)",
+                "circle-stroke-color": "#F5D400",
                 "circle-stroke-width": 2,
               },
             } as LayerSpecification);
@@ -226,8 +226,8 @@ export default function OrangeboardMap() {
                   "interpolate", ["linear"], ["zoom"],
                   11, 3, 13.5, 4.5, 16, 7,
                 ],
-                "circle-color": "#ff7a00",
-                "circle-stroke-color": "#ffffff",
+                "circle-color": "#F5D400",
+                "circle-stroke-color": "#0B0B0B",
                 "circle-stroke-width": 1,
               },
             } as LayerSpecification);
@@ -339,7 +339,7 @@ export default function OrangeboardMap() {
           position:relative, which would collapse an inset-sized div to 0h. */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Wordmark chip — light console over dark map: the Orangeboard identity */}
+      {/* Wordmark chip — light console over dark map: the Voyagent identity */}
       <div
         className="absolute top-4 left-4 z-20 px-3 py-2"
         style={{
@@ -351,10 +351,10 @@ export default function OrangeboardMap() {
         }}
       >
         <p style={{ ...MONO_LABEL, fontSize: "11px", fontWeight: 700, color: "#262626" }}>
-          Orange<span style={{ color: ORANGE }}>board</span>
+          Voya<span style={{ color: ORANGE }}>gent</span>
         </p>
         <p style={{ ...MONO_LABEL, fontSize: "7.5px", color: "#a3a3a3" }}>
-          Sell the sign, not the space
+          Sell the audience, not the space
         </p>
       </div>
 
