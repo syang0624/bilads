@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startRoom } from "@/lib/band";
 import { insertRow } from "@/lib/insforge";
+import { requireApiKey } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 
@@ -77,7 +78,9 @@ function freshWorkspace(companyContext?: Partial<CompanyContext>): Workspace {
   };
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const denied = requireApiKey(req);
+  if (denied) return denied;
   if (!workspace) workspace = freshWorkspace();
   return NextResponse.json(workspace);
 }
@@ -90,6 +93,8 @@ interface KylonPost {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const denied = requireApiKey(req);
+  if (denied) return denied;
   let body: KylonPost;
   try {
     body = (await req.json()) as KylonPost;

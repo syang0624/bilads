@@ -22,10 +22,13 @@ import {
 import { generateCacheKey, readGenerateCache, writeGenerateCache } from "@/lib/cache";
 import { generateAdImage, placeholderUrl } from "@/lib/images";
 import { recordAgentRun } from "@/lib/insforge";
+import { requireApiKey } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const denied = requireApiKey(req);
+  if (denied) return denied;
   let body: GenerateRequest;
   try {
     body = (await req.json()) as GenerateRequest;
