@@ -127,12 +127,19 @@ export default function SimulationStreetView({
           drawBillboardOverlay(overlayEl, creative, concept, quad);
         };
 
-        await draw();
+        const scheduleDraw = () => {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => void draw());
+          });
+        };
+
+        scheduleDraw();
         resizeObserver = new ResizeObserver(() => void draw());
         resizeObserver.observe(containerEl);
         povListener = panorama.addListener("pov_changed", () => {
           const pov = panorama.getPov();
           overlayEl.style.opacity = String(1 - Math.min(0.72, angularDiff(pov.heading ?? heading, heading) / 70));
+          scheduleDraw();
         });
       } catch {
         if (!cancelled) setFallback(true);
@@ -165,12 +172,12 @@ export default function SimulationStreetView({
 
   return (
     <div className="relative overflow-hidden rounded-lg border border-bilads-fg/10 bg-black">
-      <div ref={panoRef} className="aspect-video w-full" />
+      <div ref={panoRef} className="relative z-0 aspect-video w-full" />
       <canvas
         ref={overlayRef}
-        className="pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-150"
+        className="pointer-events-none absolute inset-0 z-10 h-full w-full transition-opacity duration-150"
       />
-      <div className="pointer-events-none absolute left-8 top-8 rounded bg-black/78 px-5 py-4 shadow-xl backdrop-blur">
+      <div className="pointer-events-none absolute left-8 top-8 z-20 rounded bg-black/78 px-5 py-4 shadow-xl backdrop-blur">
         <p className="text-[15px] font-mono uppercase tracking-[0.32em] text-bilads-accent">
           Interactive Street View
         </p>
