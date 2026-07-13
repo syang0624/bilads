@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-marina-chestnut",
+  "location": "Chestnut St @ Fillmore (Marina)",
+  "signals": [
+    "25 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Software company (5), Tax preparation service (4), Business management consultant (4), Promotional products supplier (3)",
+    "11 rated venues nearby, avg rating 4.5/5",
+    "Audience fit: Marina — fitness, affluent, young professionals"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 25
+}

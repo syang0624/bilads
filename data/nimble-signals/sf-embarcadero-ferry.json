@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-embarcadero-ferry",
+  "location": "Embarcadero @ Ferry Building (Embarcadero)",
+  "signals": [
+    "9 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Business management consultant (6), Business center (4), Accountant (3), Legal services (2)",
+    "5 rated venues nearby, avg rating 4.8/5",
+    "Audience fit: Embarcadero — tourists, professionals, foodies"
+  ],
+  "source_urls": [],
+  "confidence": 0.82,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 9
+}

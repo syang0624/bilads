@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-financial-montgomery",
+  "location": "Montgomery St @ Market (Financial District)",
+  "signals": [
+    "26 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Business management consultant (18), Corporate office (9), Business to business service (6), Marketing consultant (4)",
+    "16 rated venues nearby, avg rating 4.4/5",
+    "Audience fit: Financial District — office workers, professionals, tech"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 26
+}

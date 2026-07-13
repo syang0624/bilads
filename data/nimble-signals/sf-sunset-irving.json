@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-sunset-irving",
+  "location": "Irving St @ 19th Ave (Sunset)",
+  "signals": [
+    "3 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Travel agency (2), Marketing agency (2), Beauty salon (2), Advertising agency",
+    "1 rated venues nearby, avg rating 4.7/5",
+    "Audience fit: Sunset — families, students, suburban"
+  ],
+  "source_urls": [],
+  "confidence": 0.64,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 3
+}
