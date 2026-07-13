@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-mission-24th",
+  "location": "24th St @ Mission (Mission)",
+  "signals": [
+    "10 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Software company (4), General contractor (2), Corporate office (2), Public relations firm (2)",
+    "4 rated venues nearby, avg rating 5.0/5",
+    "Audience fit: Mission — latino, nightlife, creatives"
+  ],
+  "source_urls": [],
+  "confidence": 0.85,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 10
+}

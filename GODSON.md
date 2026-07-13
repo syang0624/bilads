@@ -20,15 +20,18 @@ Godson owns all data that flows into the system: billboard records, audience tag
 
 **Status: 14 boards already curated in `data/billboards.json`** — validate and finalize.
 
-- [ ] Verify all 14 boards match the `Billboard` schema from `types.ts` exactly — all fields required
-- [ ] Confirm data range covers all three sample products well:
-  - **Volt awareness (w=0.7):** top 3 should be 101 Vermont, 24th/Mission, Harrison
-  - **Volt targeted (w=0.15):** top 3 should be 101 Vermont, Harrison, Chestnut/Marina
-  - **Fog City Coffee (w=0.35):** top 3 should be 24th/Mission, Valencia, 3rd/Dogpatch
-  - **Ledgerly SaaS (w=0.5):** top 3 should be Montgomery/FiDi, Market/Powell, 101 Vermont
-- [ ] Verify the **slider reorder moment** works: dragging Volt from awareness to targeted should swap Mission out for Marina and lift Harrison
-- [ ] Confirm Sunset is deliberately low-fit for Volt and never enters its top 3
-- [ ] Collect one photo per board: Street View screenshots with big, front-facing rectangular board visible
+> **Automated:** `node scripts/validate-data.mjs` now gates all checks below (schema,
+> vocabulary, heatmap, demoMatch winners, slider reorder, Sunset exclusion). Passing ✓.
+
+- [x] Verify all 14 boards match the `Billboard` schema from `types.ts` exactly — all fields required
+- [x] Confirm data range covers all three sample products well:
+  - **Volt awareness (w=0.7):** top 3 should be 101 Vermont, 24th/Mission, Harrison ✓
+  - **Volt targeted (w=0.15):** top 3 should be 101 Vermont, Harrison, Chestnut/Marina ✓
+  - **Fog City Coffee (w=0.35):** top 3 should be 24th/Mission, Valencia, 3rd/Dogpatch ✓
+  - **Ledgerly SaaS (w=0.5):** top 3 should be Montgomery/FiDi, Market/Powell, 101 Vermont ✓
+- [x] Verify the **slider reorder moment** works: dragging Volt from awareness to targeted should swap Mission out for Marina and lift Harrison
+- [x] Confirm Sunset is deliberately low-fit for Volt and never enters its top 3
+- [ ] Collect one photo per board: Street View screenshots with big, front-facing rectangular board visible (MANUAL — needs Street View)
   - Save as `/public/billboards/<id>.jpg`
 
 ### Data Source References (for Q&A)
@@ -52,17 +55,17 @@ Godson owns all data that flows into the system: billboard records, audience tag
 
 ### Heatmap
 
-- [ ] `scripts/gen-heatmap.mjs` already exists — regenerate if needed: `node scripts/gen-heatmap.mjs`
-- [ ] Verify `data/traffic-heatmap.json` has 200-400 weighted `[lat, lng, intensity]` points along 101/280/Market/Mission/Marina
-- [ ] Spot-check: points should cluster along major corridors, not scatter randomly
+- [x] `scripts/gen-heatmap.mjs` already exists — regenerate if needed: `node scripts/gen-heatmap.mjs`
+- [x] Verify `data/traffic-heatmap.json` has 200-400 weighted `[lat, lng, intensity]` points along 101/280/Market/Mission/Marina (304 points ✓, validated)
+- [x] Spot-check: points should cluster along major corridors, not scatter randomly (bounds-checked in validate-data.mjs)
 
 ### Samples
 
-- [ ] `data/samples.ts` already exists with 3 briefs — verify campaign defaults produce correct top-3 results
-- [ ] Generate sample product images -> `/public/samples/{volt,fog-city,ledgerly}.png`
+- [x] `data/samples.ts` already exists with 3 briefs — verify campaign defaults produce correct top-3 results ✓
+- [ ] Generate sample product images -> `/public/samples/{volt,fog-city,ledgerly}.png` (BLOCKED — needs GMI image model / Phase 0)
   - Use GMI Cloud image model
   - Product-style images suitable for the upload preview
-- [ ] Run `node scripts/check-demomatch.mjs` to validate demoMatch rankings for all samples
+- [x] Run `node scripts/check-demomatch.mjs` to validate demoMatch rankings for all samples
 
 ---
 
@@ -87,7 +90,7 @@ Godson owns all data that flows into the system: billboard records, audience tag
   - Location-based business data extraction for each board neighborhood
   - Local event and trending topic collection
   - Review and customer discussion scraping for relevant categories
-- [ ] For each board, collect and structure Nimble signals:
+- [x] For each board, collect and structure Nimble signals (shape in types.ts §G `NimbleSignal`):
   ```json
   {
     "location": "Market Street near Powell Station",
@@ -100,8 +103,9 @@ Godson owns all data that flows into the system: billboard records, audience tag
     "confidence": 0.84
   }
   ```
-- [ ] Store Nimble results in `data/nimble-signals/<boardId>.json`
-- [ ] Pipe Nimble signals into the Research Agent's context so they influence recommendations
+- [x] Store Nimble results in `data/nimble-signals/<boardId>.json` (13/14 from real Google Places data via `scripts/gen-nimble-signals.mjs`; live Nimble API augments)
+- [ ] Pipe Nimble signals into the Research Agent's context so they influence recommendations (BACKEND — Noriaki wires into /api/research)
+- [ ] Wire live Nimble API for web-search/events/reviews (BLOCKED — needs NIMBLE_API_KEY)
 - [ ] **Key demo point:** Show that Nimble intelligence changes the recommendation vs. static data alone
 
 ### Sponsor: InsForge Data Storage

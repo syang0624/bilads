@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-union-square",
+  "location": "Powell St @ Geary (Union Square)",
+  "signals": [
+    "38 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Software company (16), Business management consultant (6), Business development service (6), Business center (5)",
+    "26 rated venues nearby, avg rating 4.5/5",
+    "Audience fit: Union Square — tourists, shoppers, affluent"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 38
+}
