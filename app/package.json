@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync": "node ../scripts/sync-frontend-data.mjs",
+    "predev": "node ../scripts/sync-frontend-data.mjs",
+    "prebuild": "node ../scripts/sync-frontend-data.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

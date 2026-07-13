@@ -1,0 +1,13 @@
+{
+  "boardId": "sf-280-dalycity",
+  "location": "I-280 N @ Daly City Approach (Outer Mission)",
+  "signals": [
+    "Outer Mission corridor — vehicle traffic",
+    "Audience profile: commuters, families, suburban, value-seekers, students",
+    "Est. 4,000 daily foot traffic; median income $82,000"
+  ],
+  "source_urls": [],
+  "confidence": 0.45,
+  "derivedFrom": "neighborhood-modeled (fallback; sparse Places data)",
+  "nearbyBusinessCount": 0
+}

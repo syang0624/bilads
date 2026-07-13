@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-dogpatch-3rd",
+  "location": "3rd St @ 20th (Dogpatch)",
+  "signals": [
+    "9 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Website designer (3), Artist (2), General contractor (2), Print shop (2)",
+    "8 rated venues nearby, avg rating 4.9/5",
+    "Audience fit: Dogpatch — creatives, tech, foodies"
+  ],
+  "source_urls": [],
+  "confidence": 0.82,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 9
+}

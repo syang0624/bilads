@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-richmond-geary",
+  "location": "Geary Blvd @ 20th Ave (Richmond)",
+  "signals": [
+    "19 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Construction company (6), Tax preparation service (5), Accountant (4), Shipping and mailing service (2)",
+    "9 rated venues nearby, avg rating 4.0/5",
+    "Audience fit: Richmond — families, commuters, foodies"
+  ],
+  "source_urls": [],
+  "confidence": 0.9,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 19
+}

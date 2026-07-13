@@ -1,0 +1,14 @@
+{
+  "boardId": "sf-valencia-mission",
+  "location": "Valencia St @ 20th (Mission)",
+  "signals": [
+    "6 nearby businesses mapped within 0.3 mi",
+    "Dominant nearby categories: Graphic designer (2), Tax preparation service (2), Marketing agency (2), Shipping service (2)",
+    "5 rated venues nearby, avg rating 4.3/5",
+    "Audience fit: Mission — creatives, nightlife, foodies"
+  ],
+  "source_urls": [],
+  "confidence": 0.73,
+  "derivedFrom": "google-places-nearby (real)",
+  "nearbyBusinessCount": 6
+}

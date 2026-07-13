@@ -1,3 +1,6 @@
+// AUTO-GENERATED from data/samples.ts by scripts/sync-frontend-data.mjs — do not edit here.
+// Edit the source, then `npm run sync` (runs automatically on predev/prebuild).
+
 import type { SampleProduct } from "./types";
 
 // Three prewritten sample briefs. Clicking a sample card on the landing page
