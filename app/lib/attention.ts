@@ -24,7 +24,7 @@ export interface AttentionReport {
 }
 
 export interface AttentionInput {
-  imageUrl: string; // /generated/<file>.png public path
+  imageUrl: string; // local /generated path or InsForge Storage URL
   headline: string;
   subline?: string;
   productName: string;
@@ -35,11 +35,53 @@ function publicDir(): string {
   return existsSync(local) ? local : join(process.cwd(), "app", "public");
 }
 
-/** Resolve a /generated/... URL to PNG bytes, or null if not on disk. */
-export function readCreativePng(imageUrl: string): Buffer | null {
-  if (!/^\/generated\/[\w.-]+\.png$/.test(imageUrl)) return null;
-  const path = join(publicDir(), imageUrl);
-  return existsSync(path) ? readFileSync(path) : null;
+const GENERATED_BUCKET = "generated-creatives";
+const MAX_CREATIVE_BYTES = 10 * 1024 * 1024;
+
+/** Load local or allowlisted InsForge-hosted creative bytes without permitting SSRF. */
+export async function loadCreativePng(imageUrl: string): Promise<Buffer | null> {
+  if (/^\/generated\/[\w.-]+\.png$/.test(imageUrl)) {
+    const path = join(publicDir(), imageUrl.slice(1));
+    return existsSync(path) ? readFileSync(path) : null;
+  }
+
+  const baseUrl = process.env.INSFORGE_BASE_URL;
+  if (!baseUrl) return null;
+
+  try {
+    const url = new URL(imageUrl);
+    const base = new URL(baseUrl);
+    const prefix = `/api/storage/buckets/${GENERATED_BUCKET}/objects/`;
+    if (url.origin !== base.origin || !url.pathname.startsWith(prefix)) return null;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        redirect: "error",
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+      const allowedContentType =
+        contentType.startsWith("image/") ||
+        contentType === "application/octet-stream" ||
+        contentType === "binary/octet-stream";
+      if (!allowedContentType) return null;
+      const contentLength = Number(response.headers.get("content-length") ?? 0);
+      if (contentLength > MAX_CREATIVE_BYTES) return null;
+
+      const bytes = Buffer.from(await response.arrayBuffer());
+      const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      if (bytes.length > MAX_CREATIVE_BYTES || !bytes.subarray(0, 8).equals(pngSignature)) return null;
+      return bytes;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return null;
+  }
 }
 
 const clamp = (n: unknown): number =>

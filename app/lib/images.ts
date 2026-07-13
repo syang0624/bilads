@@ -7,6 +7,9 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { image } from "./gmi";
+import { uploadFile } from "./insforge";
+
+const GENERATED_BUCKET = "generated-creatives";
 
 /** Branded SVG placeholder rendered by app/app/api/placeholder/route.ts. */
 export function placeholderUrl(text: string): string {
@@ -38,6 +41,26 @@ export async function generateAdImage(
   if (!forceRegenerate && existsSync(diskPath)) return urlPath;
   try {
     const bytes = await image(prompt);
+
+    let storageError: unknown;
+    try {
+      const stored = await uploadFile(
+        GENERATED_BUCKET,
+        `generated/${filename}`,
+        bytes,
+        "image/png"
+      );
+      if (stored) return stored.url;
+    } catch (error) {
+      storageError = error;
+    }
+
+    // Deployed functions cannot publish files written at runtime. Local disk is
+    // retained only for offline/development use when Storage is unavailable.
+    if (process.env.NODE_ENV === "production") {
+      throw storageError ?? new Error("InsForge Storage is not configured");
+    }
+
     mkdirSync(generatedDir(), { recursive: true });
     writeFileSync(diskPath, bytes);
     return urlPath;

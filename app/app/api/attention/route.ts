@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   runAttention,
   heuristicAttention,
-  readCreativePng,
+  loadCreativePng,
   type AttentionInput,
 } from "@/lib/attention";
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const png = readCreativePng(input.imageUrl);
+  const png = await loadCreativePng(input.imageUrl);
   if (png) {
     try {
       return NextResponse.json(await runAttention(input, png));

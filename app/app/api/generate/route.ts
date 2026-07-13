@@ -26,6 +26,7 @@ import { recordAgentRun } from "@/lib/insforge";
 import { requireApiKey } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const denied = requireApiKey(req);
