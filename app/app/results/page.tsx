@@ -30,9 +30,24 @@ const MapView = dynamic(() => import("./MapView"), { ssr: false }) as React.Comp
   blobs?: BlobsResult["blobs"];
 }>;
 
+const SimulationStreetView = dynamic(() => import("./SimulationStreetView"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[360px] w-full rounded-lg border border-bilads-fg/10 bg-black flex items-center justify-center">
+      <p className="animate-pulse text-[10px] font-mono uppercase tracking-[0.16em] text-bilads-accent">
+        Loading 3D street simulation…
+      </p>
+    </div>
+  ),
+}) as React.ComponentType<{ board: Billboard; concept: AdConcept }>;
+
 // ─── Agent Theater ──────────────────────────────────────────────────────────
 
 type AgentStatus = "waiting" | "active" | "complete";
+type SimulationWithCreative = SimulationOutput & {
+  board: Billboard;
+  concept: AdConcept;
+};
 
 function AgentCard({
   name,
@@ -282,7 +297,7 @@ function CreativePanel({
   brief: ProductBrief;
   audienceProfile: AudienceProfile;
   onBack: () => void;
-  onSimulate: (board: Billboard, demoMatch: number) => void;
+  onSimulate: (board: Billboard, demoMatch: number, concept: AdConcept) => void;
 }) {
   const [concepts, setConcepts] = useState<AdConcept[]>([]);
   const [loading, setLoading] = useState(true);
@@ -425,6 +440,12 @@ function CreativePanel({
                           ? "Testing attention…"
                           : "Test attention"}
                       </button>
+                      <button
+                        onClick={() => onSimulate(board, 0.5, concept)}
+                        className="ml-auto bg-bilads-accent text-bilads-bg text-xs font-bold px-3 py-2 rounded hover:bg-bilads-accent/90 transition-colors"
+                      >
+                        Simulate this creative
+                      </button>
                     </div>
                     {(() => {
                       const report = attention[concept.imageUrl];
@@ -471,10 +492,10 @@ function CreativePanel({
 
             {/* Simulate button */}
             <button
-              onClick={() => onSimulate(board, 0.5)}
+              onClick={() => concepts[0] && onSimulate(board, 0.5, concepts[0])}
               className="w-full bg-bilads-surface border border-bilads-accent text-bilads-accent font-bold py-3 rounded-lg hover:bg-bilads-accent hover:text-bilads-bg transition-colors mb-6"
             >
-              Simulate campaign
+              Simulate campaign with concept 1
             </button>
 
             {/* Sponsor badges */}
@@ -547,7 +568,7 @@ function SimulationView({
   simulation,
   onClose,
 }: {
-  simulation: SimulationOutput;
+  simulation: SimulationWithCreative;
   onClose: () => void;
 }) {
   const [animDay, setAnimDay] = useState(0);
@@ -595,15 +616,29 @@ function SimulationView({
 
   return (
     <div className="fixed inset-0 bg-bilads-bg/95 z-[60] flex items-center justify-center">
-      <div className="bg-bilads-surface border border-bilads-fg/20 rounded-xl p-8 max-w-3xl w-full mx-4">
+      <div className="bg-bilads-surface border border-bilads-fg/20 rounded-xl p-8 max-w-4xl w-full mx-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Campaign Simulation</h2>
+          <div>
+            <h2 className="text-xl font-bold">Campaign Simulation</h2>
+            <p className="text-xs text-bilads-fg/45 font-mono">
+              {simulation.board.name} · {simulation.board.neighborhood}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="text-bilads-fg/40 hover:text-bilads-fg"
           >
             &times;
           </button>
+        </div>
+
+        {/* 3D street-map billboard preview */}
+        <div className="mb-6">
+          <SimulationStreetView board={simulation.board} concept={simulation.concept} />
+          <div className="mt-2 flex items-center justify-between gap-3 text-[10px] font-mono text-bilads-fg/35">
+            <span>3D map preview: generated creative placed at the selected billboard coordinates</span>
+            <span>{simulation.concept.language.toUpperCase()}</span>
+          </div>
         </div>
 
         {/* Chart */}
@@ -753,7 +788,7 @@ export default function ResultsPage() {
   const [agentPhase, setAgentPhase] = useState<0 | 1 | 2>(0);
   const [selectedBoard, setSelectedBoard] = useState<string | null>(null);
   const [creativeBoard, setCreativeBoard] = useState<Billboard | null>(null);
-  const [simulation, setSimulation] = useState<SimulationOutput | null>(null);
+  const [simulation, setSimulation] = useState<SimulationWithCreative | null>(null);
   const [showBand, setShowBand] = useState(false);
   const [blobsData, setBlobsData] = useState<BlobsResult | null>(null);
 
@@ -1029,9 +1064,9 @@ export default function ResultsPage() {
             />
           )}
 
-          {/* Floating info card */}
+          {/* Floating selected-location card */}
           {selectedBoard && research && (
-            <div className="absolute top-4 right-4 z-20">
+            <div className="absolute right-4 bottom-4 z-20">
               <InfoCard
                 board={billboards.find((b) => b.id === selectedBoard)!}
                 ranking={
@@ -1060,7 +1095,7 @@ export default function ResultsPage() {
           brief={brief}
           audienceProfile={research.researcher.audienceProfile}
           onBack={() => setCreativeBoard(null)}
-          onSimulate={(board, demoMatch) => {
+          onSimulate={(board, demoMatch, concept) => {
             const ranking = research.mediaBuyer.rankings.find(
               (r) => r.id === board.id
             );
@@ -1069,7 +1104,7 @@ export default function ResultsPage() {
               ranking?.demoMatch || demoMatch,
               campaign.campaignWeeks
             );
-            setSimulation(sim);
+            setSimulation({ ...sim, board, concept });
           }}
         />
       )}

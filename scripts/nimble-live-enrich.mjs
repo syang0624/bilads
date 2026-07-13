@@ -1,8 +1,8 @@
 // Augments data/nimble-signals/<boardId>.json with LIVE Nimble intelligence
 // (GODSON.md Phase 3: "Wire live Nimble API for web-search/events/reviews").
 //
-// Uses the Nimble CLI (`npm i -g @nimble-way/nimble-cli`) with NIMBLE_API_KEY
-// from the environment or .env.local / app/.env.local. Per board it runs one
+// Uses the local Nimble CLI dependency with NIMBLE_API_KEY from the environment
+// or .env / .env.local / app/.env.local. Per board it runs one
 // lite web search scoped to the neighborhood + audience tags, then merges up
 // to LIVE_MAX signal bullets into `signals` and fills `source_urls` — exactly
 // the augmentation slot types.ts §G reserves for the live pipeline.
@@ -19,18 +19,23 @@ import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SIGNALS = join(ROOT, "data", "nimble-signals");
+const LOCAL_NIMBLE = join(ROOT, "app", "node_modules", ".bin", "nimble");
 const LIVE_MAX = 2;
 const LIVE_MARK = "nimble-live-search";
 
-// --- env: prefer process.env, fall back to .env.local / app/.env.local ------
+// --- env: prefer process.env, fall back to local env files -------------------
 function loadKey() {
   if (process.env.NIMBLE_API_KEY) return process.env.NIMBLE_API_KEY;
-  for (const f of [join(ROOT, ".env.local"), join(ROOT, "app", ".env.local")]) {
+  for (const f of [join(ROOT, ".env"), join(ROOT, ".env.local"), join(ROOT, "app", ".env.local")]) {
     if (!existsSync(f)) continue;
     const m = readFileSync(f, "utf8").match(/^NIMBLE_API_KEY=(.+)$/m);
     if (m && m[1].trim()) return m[1].trim();
   }
   return null;
+}
+
+function nimbleBin() {
+  return existsSync(LOCAL_NIMBLE) ? LOCAL_NIMBLE : "nimble";
 }
 
 const key = loadKey();
@@ -41,7 +46,7 @@ if (!key) {
 
 function nimbleSearch(query, focus) {
   const res = spawnSync(
-    "nimble",
+    nimbleBin(),
     ["search", "--query", query, "--focus", focus, "--max-results", "3", "--search-depth", "lite", "--country", "US", "--format", "json"],
     { env: { ...process.env, NIMBLE_API_KEY: key }, encoding: "utf8", timeout: 60_000 }
   );
@@ -75,10 +80,9 @@ for (const b of boards) {
   const query = `${hood} San Francisco new business openings and events`;
 
   try {
-    // News focus keeps signal text local and current (general search drifts to
-    // dictionary/NYT-tier noise for short neighborhood names like "Mission")
-    // but returns no URLs at lite depth — a second general call supplies the
-    // evidence links the NimbleSignal contract wants in source_urls.
+    // News focus keeps signal text local and current. Avoid a loose second
+    // general search here because short neighborhood names like "Mission" can
+    // drift into unrelated brand/domain results.
     const news = (nimbleSearch(query, "news").results ?? []).filter((r) => r.title);
     if (news.length === 0) throw new Error("no results");
 
@@ -86,17 +90,7 @@ for (const b of boards) {
       const age = r.additional_data?.publish_date_raw;
       return `Live web${age ? ` (${age})` : ""}: ${trim(r.title, 70)} — ${trim(r.description ?? "", 110)}`;
     });
-    let liveUrls = news.map((r) => r.url).filter(Boolean);
-    if (liveUrls.length === 0) {
-      try {
-        liveUrls = (nimbleSearch(query, "general").results ?? [])
-          .map((r) => r.url)
-          .filter(Boolean)
-          .slice(0, 3);
-      } catch {
-        // URLs are nice-to-have; signals alone are still a valid augmentation
-      }
-    }
+    const liveUrls = news.map((r) => r.url).filter(Boolean).slice(0, 3);
 
     // Replace any previous live additions (tracked in sig.live), never stack.
     const prevLive = new Set(sig.live?.signals ?? []);

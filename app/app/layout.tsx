@@ -28,7 +28,10 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-bilads-bg text-bilads-fg font-display">
+      <body
+        suppressHydrationWarning
+        className="min-h-full flex flex-col bg-bilads-bg text-bilads-fg font-display"
+      >
         {children}
       </body>
     </html>
