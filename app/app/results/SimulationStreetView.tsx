@@ -14,6 +14,13 @@ const CLEARANCE = 8;
 const POLE_R = 0.16;
 const POLE_INSET = PANEL_W * 0.28;
 
+type DetectionResponse = {
+  quad: [[number, number], [number, number], [number, number], [number, number]] | null;
+  confidence?: number;
+  reason?: string;
+  source?: string;
+};
+
 export default function SimulationStreetView({
   board,
   concept,
@@ -23,9 +30,11 @@ export default function SimulationStreetView({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fallback, setFallback] = useState(false);
+  const [status, setStatus] = useState<"loading" | "detecting" | "detected" | "not-found">("loading");
 
   useEffect(() => {
     setFallback(false);
+    setStatus("loading");
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -46,20 +55,37 @@ export default function SimulationStreetView({
     let cancelled = false;
     const street = new Image();
     street.crossOrigin = "anonymous";
-    const creative = new Image();
-    creative.crossOrigin = "anonymous";
 
-    street.onload = () => {
+    street.onload = async () => {
       if (cancelled) return;
-      creative.onload = () => {
+      drawDetectionPending(ctx, street, width, height);
+      setStatus("detecting");
+
+      try {
+        const imageUrl = canvas.toDataURL("image/jpeg", 0.72);
+        const detect = await fetch("/api/detect-billboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl, imageW: width, imageH: height, boardName: board.name }),
+        });
+        const detection = (await detect.json()) as DetectionResponse;
         if (cancelled) return;
-        drawStreetComposite(ctx, street, creative, concept, width, height);
-      };
-      creative.onerror = () => {
+
+        if (!detection.quad) {
+          setStatus("not-found");
+          drawNoDetectedBillboard(ctx, street, width, height, detection.reason);
+          return;
+        }
+
+        const creative = await loadImage(concept.imageUrl);
         if (cancelled) return;
-        drawStreetComposite(ctx, street, undefined, concept, width, height);
-      };
-      creative.src = concept.imageUrl;
+        setStatus("detected");
+        drawDetectedBillboardComposite(ctx, street, creative, concept, width, height, detection.quad);
+      } catch {
+        if (cancelled) return;
+        setStatus("not-found");
+        drawNoDetectedBillboard(ctx, street, width, height);
+      }
     };
 
     street.onerror = () => {
@@ -81,10 +107,17 @@ export default function SimulationStreetView({
       <canvas ref={canvasRef} className="block aspect-video w-full" />
       <div className="pointer-events-none absolute left-8 top-8 rounded bg-black/78 px-5 py-4 shadow-xl backdrop-blur">
         <p className="text-[15px] font-mono uppercase tracking-[0.32em] text-bilads-accent">
-          Google Street View Composite
+          Existing Billboard Detection
         </p>
         <p className="mt-2 text-2xl text-bilads-fg/65">
           {board.name} · {board.neighborhood}
+        </p>
+        <p className="mt-3 max-w-[520px] text-sm font-mono uppercase tracking-[0.18em] text-bilads-fg/45">
+          {status === "detected"
+            ? "Detected real ad face"
+            : status === "not-found"
+              ? "No existing billboard face detected"
+              : "Scanning street scene"}
         </p>
       </div>
       <div className="pointer-events-none absolute bottom-4 right-5 rounded bg-black/55 px-3 py-1 text-[10px] font-mono text-white/70">
@@ -240,17 +273,40 @@ function offsetPoint(lat: number, lng: number, bearingDeg: number, meters: numbe
   return { lat: (lat2 * 180) / Math.PI, lng: (lng2 * 180) / Math.PI };
 }
 
-function drawStreetComposite(
+function drawDetectionPending(
   ctx: CanvasRenderingContext2D,
   street: HTMLImageElement,
-  creative: HTMLImageElement | undefined,
-  concept: AdConcept,
   width: number,
   height: number
 ) {
   ctx.clearRect(0, 0, width, height);
   drawCover(ctx, street, width, height);
+  drawStreetVignette(ctx, width, height);
+}
 
+function drawNoDetectedBillboard(
+  ctx: CanvasRenderingContext2D,
+  street: HTMLImageElement,
+  width: number,
+  height: number,
+  reason = "No real advertising face was visible from this Street View angle."
+) {
+  ctx.clearRect(0, 0, width, height);
+  drawCover(ctx, street, width, height);
+  drawStreetVignette(ctx, width, height);
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.72)";
+  ctx.fillRect(width * 0.08, height * 0.68, width * 0.62, 82);
+  ctx.fillStyle = "#f5d400";
+  ctx.font = "700 22px Arial, sans-serif";
+  ctx.fillText("No existing billboard face detected", width * 0.105, height * 0.725);
+  ctx.fillStyle = "rgba(255,255,255,0.72)";
+  ctx.font = "16px Arial, sans-serif";
+  ctx.fillText(reason.slice(0, 110), width * 0.105, height * 0.765, width * 0.56);
+  ctx.restore();
+}
+
+function drawStreetVignette(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const vignette = ctx.createRadialGradient(
     width * 0.5,
     height * 0.42,
@@ -263,39 +319,53 @@ function drawStreetComposite(
   vignette.addColorStop(1, "rgba(0,0,0,0.46)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
+}
+
+function drawDetectedBillboardComposite(
+  ctx: CanvasRenderingContext2D,
+  street: HTMLImageElement,
+  creative: HTMLImageElement | undefined,
+  concept: AdConcept,
+  width: number,
+  height: number,
+  quad: [[number, number], [number, number], [number, number], [number, number]]
+) {
+  ctx.clearRect(0, 0, width, height);
+  drawCover(ctx, street, width, height);
+  drawStreetVignette(ctx, width, height);
 
   const billboard = renderCreativeCanvas(creative, concept);
-  const corners: Point[] = [
-    { x: width * 0.255, y: height * 0.31 },
-    { x: width * 0.76, y: height * 0.285 },
-    { x: width * 0.71, y: height * 0.565 },
-    { x: width * 0.295, y: height * 0.59 },
-  ];
-  const leftBase = lerpPoint(corners[3], corners[2], 0.25);
-  const rightBase = lerpPoint(corners[3], corners[2], 0.72);
-  drawPole(ctx, leftBase, { x: leftBase.x - width * 0.035, y: height * 0.88 });
-  drawPole(ctx, rightBase, { x: rightBase.x + width * 0.03, y: height * 0.875 });
-
+  const corners = quad.map(([x, y]) => ({ x, y })) as [Point, Point, Point, Point];
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.62)";
-  ctx.shadowBlur = 28;
-  ctx.shadowOffsetX = 4;
-  ctx.shadowOffsetY = 12;
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 4;
   tracePolygon(ctx, corners);
   ctx.fillStyle = "#050505";
   ctx.fill();
   ctx.restore();
 
   ctx.lineJoin = "round";
-  ctx.lineWidth = 18;
-  ctx.strokeStyle = "#050505";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(0,0,0,0.84)";
   tracePolygon(ctx, corners);
   ctx.stroke();
   drawPerspectiveImage(ctx, billboard, corners);
-  ctx.lineWidth = 7;
+  ctx.lineWidth = 3;
   ctx.strokeStyle = "rgba(255,255,255,0.14)";
   tracePolygon(ctx, corners);
   ctx.stroke();
+}
+
+function loadImage(src: string): Promise<HTMLImageElement | undefined> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(undefined);
+    img.src = src;
+  });
 }
 
 type Point = { x: number; y: number };
