@@ -41,6 +41,7 @@ function messageStyle(message: BandMessage): {
 }
 
 export default function BandDiscussion({
+  campaignId,
   brief,
   research,
   topBoards,
@@ -48,6 +49,7 @@ export default function BandDiscussion({
   visible,
   onToggle,
 }: {
+  campaignId: string;
   brief: ProductBrief;
   research: ResearchResponse;
   topBoards: Billboard[];
@@ -76,7 +78,9 @@ export default function BandDiscussion({
       body: JSON.stringify({
         action: "start",
         requestId,
+        campaignId,
         context: {
+          campaignId,
           brief,
           researcher: research.researcher,
           mediaBuyer: research.mediaBuyer,
@@ -107,6 +111,7 @@ export default function BandDiscussion({
     research,
     topBoardId,
     campaignWeeks,
+    campaignId,
     requestId,
     retryNonce,
   ]);
@@ -136,7 +141,8 @@ export default function BandDiscussion({
         body: JSON.stringify({
           action,
           roomId: room.roomId,
-          decidedBy: "Bilads campaign owner",
+          campaignId,
+          requestId: `${requestId}:decision`,
         }),
       });
       const body = (await response.json()) as BandRoom | { error?: string };

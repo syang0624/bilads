@@ -12,7 +12,7 @@ import type { AdConcept, ResearchResponse } from "@/lib/types";
 import type { ProductBrief } from "@/lib/types";
 import { getBoard } from "./boards";
 import { nimbleForBoard, loadNimbleSignals } from "./nimble";
-import { recordAgentMessage, recordApproval } from "./insforge";
+import { recordAgentMessage } from "./insforge";
 import {
   BandConfigurationError,
   publishBandDecision,
@@ -51,6 +51,7 @@ export interface BandRoom {
 }
 
 export interface BandContext {
+  campaignId: string;
   brief: ProductBrief;
   researcher?: ResearchResponse["researcher"];
   mediaBuyer?: ResearchResponse["mediaBuyer"];
@@ -59,8 +60,14 @@ export interface BandContext {
   campaignWeeks?: number;
 }
 
+export interface BandPersistence {
+  campaignId: string;
+  agentRunId: string;
+}
+
 const rooms = new Map<string, BandRoom>();
 const liveRooms = new Map<string, BandLiveRoom>();
+const roomPersistence = new Map<string, BandPersistence>();
 let roomSeq = 0;
 
 export function getRoom(roomId: string): BandRoom | undefined {
@@ -80,9 +87,10 @@ function integrationWarning(error: unknown): string {
     : "Band is unavailable. Showing the local fallback discussion.";
 }
 
-export async function startRoom(context: BandContext): Promise<BandRoom> {
+export async function startRoom(context: BandContext, persistence: BandPersistence): Promise<BandRoom> {
   const roomId = `room-${++roomSeq}-${Date.now().toString(36)}`;
   const messages: BandMessage[] = [];
+  const persistenceWrites: Promise<void>[] = [];
   const post = (agent: BandAgent, role: string, message: string, action?: string) => {
     const msg: BandMessage = {
       agent,
@@ -92,7 +100,16 @@ export async function startRoom(context: BandContext): Promise<BandRoom> {
       ...(action ? { action } : {}),
     };
     messages.push(msg);
-    void recordAgentMessage({ roomId, ...msg }); // persisted thread (InsForge)
+    persistenceWrites.push(recordAgentMessage({
+      campaignId: persistence.campaignId,
+      agentRunId: persistence.agentRunId,
+      roomId,
+      senderKind: "agent",
+      agentName: msg.agent,
+      roleLabel: msg.role,
+      body: msg.message,
+      action: msg.action,
+    }));
   };
 
   const { brief, mediaBuyer, boardId, concepts } = context;
@@ -177,6 +194,9 @@ export async function startRoom(context: BandContext): Promise<BandRoom> {
     integration: { mode: "fallback" },
   };
   rooms.set(roomId, room);
+  roomPersistence.set(roomId, persistence);
+
+  await Promise.all(persistenceWrites);
 
   try {
     const liveRoom = await publishBandRoom(context.brief.productName, messages);
@@ -192,7 +212,8 @@ export async function startRoom(context: BandContext): Promise<BandRoom> {
 export async function decideRoom(
   roomId: string,
   decision: "approved" | "rejected",
-  decidedBy: string,
+  // Unverified caller label such as "shared-web" — there are no user accounts.
+  decidedBySubject: string,
   note?: string
 ): Promise<BandRoom | undefined> {
   const room = rooms.get(roomId);
@@ -206,12 +227,24 @@ export async function decideRoom(
     action: decision,
   };
   room.messages.push(msg);
-  await recordApproval({ roomId, decision, decidedBy, context: { note } });
+  const persistence = roomPersistence.get(roomId);
+  if (persistence) {
+    await recordAgentMessage({
+      campaignId: persistence.campaignId,
+      agentRunId: persistence.agentRunId,
+      roomId,
+      senderKind: "human",
+      actorSubject: decidedBySubject,
+      roleLabel: msg.role,
+      body: msg.message,
+      action: msg.action,
+    });
+  }
 
   const liveRoom = liveRooms.get(roomId);
   if (liveRoom) {
     try {
-      await publishBandDecision(liveRoom, decision, decidedBy, note);
+      await publishBandDecision(liveRoom, decision, decidedBySubject, note);
     } catch (error) {
       room.integration.warning =
         error instanceof Error

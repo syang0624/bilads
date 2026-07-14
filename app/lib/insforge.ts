@@ -1,247 +1,230 @@
-/**
- * InsForge — backend infrastructure client (SPONSORS.md §5).
- * Auth, database, storage, and agent-job-state tracking for Bilads.
- *
- * Configure with INSFORGE_BASE_URL + INSFORGE_API_KEY in .env.local. When not
- * configured (or the network is down) every operation transparently uses an
- * in-process store, so the demo works offline and no endpoint ever fails
- * because the system of record is unreachable.
- */
+import "server-only";
+
+import { createHash } from "node:crypto";
 import { createAdminClient } from "@insforge/sdk";
 
-/* --- schema ---------------------------------------------------------------- */
+/**
+ * Narrow server-side repository over the InsForge project-admin SDK.
+ * There are no user accounts: every write lands in the single seeded Bilads
+ * workspace and callers are identified only by an unverified subject label.
+ */
 
-export const TABLES = [
-  "organizations",
-  "users",
-  "brands",
-  "products",
-  "campaigns",
-  "target_audiences",
-  "candidate_locations",
-  "location_signals",
-  "media_channels",
-  "creative_variants",
-  "simulations",
-  "agent_runs",
-  "agent_messages",
-  "approvals",
-] as const;
+/** Fixed UUID of the seeded `bilads` workspace (migration 20260714001745). */
+export const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
+export const WORKSPACE_SLUG = "bilads";
 
-export type TableName = (typeof TABLES)[number];
-
-export interface Row {
-  id: string;
-  created_at: string;
-  [key: string]: unknown;
+export interface StoredFile {
+  bucket: string;
+  url: string;
+  key: string;
+  mimeType: string;
+  byteSize: number;
+  sha256: string;
 }
 
-/* --- transport -------------------------------------------------------------- */
+export type AgentExecutionMode = "live" | "fallback" | "cache" | "mixed";
+export type AgentRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
-const BASE_URL = process.env.INSFORGE_BASE_URL;
-const API_KEY = process.env.INSFORGE_API_KEY;
+export interface AgentRun {
+  id: string;
+  workspace_id: string;
+  campaign_id: string | null;
+  status: AgentRunStatus;
+  started_at: string | null;
+}
+
 let adminClient: ReturnType<typeof createAdminClient> | null = null;
 
-export function insforgeConfigured(): boolean {
-  return Boolean(BASE_URL && API_KEY);
+function adminConfig(): { baseUrl: string; apiKey: string } | null {
+  const baseUrl = process.env.INSFORGE_BASE_URL?.trim();
+  const apiKey = process.env.INSFORGE_API_KEY?.trim();
+  return baseUrl && apiKey ? { baseUrl, apiKey } : null;
 }
 
-function insforgeAdmin(): ReturnType<typeof createAdminClient> | null {
-  if (!BASE_URL || !API_KEY) return null;
-  adminClient ??= createAdminClient({ baseUrl: BASE_URL, apiKey: API_KEY });
+export function insforgeAdminConfigured(): boolean {
+  return adminConfig() !== null;
+}
+
+function admin() {
+  const config = adminConfig();
+  if (!config) {
+    throw new Error("InsForge admin access is not configured");
+  }
+  adminClient ??= createAdminClient(config);
   return adminClient;
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`,
-      ...init?.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`InsForge ${path} -> ${res.status}`);
-  return (await res.json()) as T;
+/** Server-only database accessor for the repository modules (never route input). */
+export function adminDatabase() {
+  return admin().database;
 }
 
-/* --- in-memory fallback store ------------------------------------------------ */
-
-const memory = new Map<TableName, Row[]>();
-let seq = 0;
-
-function memTable(table: TableName): Row[] {
-  let rows = memory.get(table);
-  if (!rows) {
-    rows = [];
-    memory.set(table, rows);
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message: unknown }).message);
   }
-  return rows;
+  return String(error);
 }
 
-/* --- database ---------------------------------------------------------------- */
-
-export async function insertRow(table: TableName, data: Record<string, unknown>): Promise<Row> {
-  const row: Row = { id: `${table}-${++seq}-${Date.now()}`, created_at: new Date().toISOString(), ...data };
-  if (insforgeConfigured()) {
-    try {
-      return await api<Row>(`/api/database/records/${table}`, {
-        method: "POST",
-        body: JSON.stringify(row),
-      });
-    } catch {
-      // fall through to memory — writes must never fail the request
-    }
-  }
-  memTable(table).push(row);
-  return row;
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+    .join(",")}}`;
 }
 
-export async function listRows(
-  table: TableName,
-  filter?: (row: Row) => boolean
-): Promise<Row[]> {
-  if (insforgeConfigured()) {
-    try {
-      const rows = await api<Row[]>(`/api/database/records/${table}`);
-      return filter ? rows.filter(filter) : rows;
-    } catch {
-      // fall through to memory
-    }
-  }
-  const rows = memTable(table);
-  return filter ? rows.filter(filter) : [...rows];
-}
-
-export async function updateRow(
-  table: TableName,
-  id: string,
-  patch: Record<string, unknown>
-): Promise<Row | null> {
-  if (insforgeConfigured()) {
-    try {
-      return await api<Row>(`/api/database/records/${table}/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
-    } catch {
-      // fall through to memory
-    }
-  }
-  const rows = memTable(table);
-  const row = rows.find((r) => r.id === id);
-  if (!row) return null;
-  Object.assign(row, patch);
-  return row;
-}
-
-/* --- auth (thin wrappers; memory fallback keeps demo flowing) ----------------- */
-
-export interface Session {
-  userId: string;
-  email: string;
-  token: string;
-}
-
-export async function signUp(email: string, password: string): Promise<Session> {
-  if (insforgeConfigured()) {
-    try {
-      return await api<Session>("/api/auth/sign-up", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-    } catch {
-      // fall through
-    }
-  }
-  const user = await insertRow("users", { email });
-  return { userId: user.id, email, token: `local-${user.id}` };
-}
-
-export async function signIn(email: string, password: string): Promise<Session> {
-  if (insforgeConfigured()) {
-    try {
-      return await api<Session>("/api/auth/sign-in", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-    } catch {
-      // fall through
-    }
-  }
-  const users = await listRows("users", (u) => u.email === email);
-  const user = users[0] ?? (await insertRow("users", { email }));
-  return { userId: user.id, email, token: `local-${user.id}` };
-}
-
-/* --- storage ------------------------------------------------------------------ */
-
-export interface StoredFile {
-  url: string;
-  key: string;
-}
-
-/** Upload server-generated bytes with the project-admin client. */
 export async function uploadFile(
   bucket: string,
-  name: string,
+  key: string,
   bytes: Buffer,
   mimeType = "application/octet-stream"
 ): Promise<StoredFile | null> {
-  const admin = insforgeAdmin();
-  if (!admin) return null;
+  if (!insforgeAdminConfigured()) return null;
 
   const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
-  const { data, error } = await admin.storage.from(bucket).upload(name, blob);
-  if (error) throw error;
-  if (!data?.url || !data.key) throw new Error("InsForge Storage upload returned no URL or key");
-  return { url: data.url, key: data.key };
+  const { data, error } = await admin().storage.from(bucket).upload(key, blob);
+  if (error) throw new Error(`InsForge storage upload failed: ${errorMessage(error)}`);
+  if (!data?.url || !data.key) throw new Error("InsForge storage upload returned no URL or key");
+
+  return {
+    bucket,
+    url: data.url,
+    key: data.key,
+    mimeType,
+    byteSize: bytes.byteLength,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
 }
 
-/** Download a known object through the authenticated server client. */
 export async function downloadFile(bucket: string, key: string): Promise<Buffer | null> {
-  const admin = insforgeAdmin();
-  if (!admin) return null;
-
-  const { data, error } = await admin.storage.from(bucket).download(key);
-  if (error) throw error;
+  if (!insforgeAdminConfigured()) return null;
+  const { data, error } = await admin().storage.from(bucket).download(key);
+  if (error) throw new Error(`InsForge storage download failed: ${errorMessage(error)}`);
   return data ? Buffer.from(await data.arrayBuffer()) : null;
 }
 
-/* --- campaign CRUD + approval trail + agent job state -------------------------- */
-
-export async function createCampaign(data: Record<string, unknown>): Promise<Row> {
-  return insertRow("campaigns", { status: "draft", ...data });
+export async function removeFile(bucket: string, key: string): Promise<void> {
+  if (!insforgeAdminConfigured()) return;
+  const { error } = await admin().storage.from(bucket).remove(key);
+  if (error) throw new Error(`InsForge storage delete failed: ${errorMessage(error)}`);
 }
 
-export async function updateCampaignStatus(id: string, status: string): Promise<Row | null> {
-  return updateRow("campaigns", id, { status });
-}
+const RUN_COLUMNS = "id, workspace_id, campaign_id, status, started_at";
 
-export async function listCampaigns(userId?: string): Promise<Row[]> {
-  return listRows("campaigns", userId ? (c) => c.userId === userId : undefined);
-}
-
-/** Every human decision recorded with timestamp and context (approval trail). */
-export async function recordApproval(data: {
-  roomId: string;
-  decision: "approved" | "rejected";
-  decidedBy: string;
-  context: unknown;
-}): Promise<Row> {
-  return insertRow("approvals", data);
-}
-
-/** Real-time agent status: which agent ran, live vs fallback, what it produced. */
-export async function recordAgentRun(data: {
+export async function startAgentRun(args: {
+  campaignId?: string;
+  /** Unverified caller label ("shared-web", "kylon"), never a user id. */
+  initiatedBySubject: string;
+  requestId: string;
   agent: string;
-  input: unknown;
-  output: unknown;
-  live: boolean;
-}): Promise<Row> {
-  return insertRow("agent_runs", { ...data, status: "completed" });
+  model?: string;
+  input: Record<string, unknown>;
+  executionMode?: AgentExecutionMode;
+}): Promise<AgentRun> {
+  const now = new Date().toISOString();
+  const inputJson = stableJson(args.input);
+  const row = {
+    workspace_id: WORKSPACE_ID,
+    campaign_id: args.campaignId ?? null,
+    initiated_by_subject: args.initiatedBySubject,
+    request_id: args.requestId,
+    agent: args.agent,
+    model: args.model ?? null,
+    input_hash: createHash("sha256").update(inputJson).digest("hex"),
+    input_summary: args.input,
+    execution_mode: args.executionMode ?? "live",
+    status: "running",
+    started_at: now,
+  };
+
+  const { data, error } = await admin()
+    .database.from("agent_runs")
+    .insert([row])
+    .select(RUN_COLUMNS)
+    .single();
+
+  if (!error && data) return data as AgentRun;
+
+  const existing = args.campaignId
+    ? await admin()
+        .database.from("agent_runs")
+        .select(RUN_COLUMNS)
+        .eq("campaign_id", args.campaignId)
+        .eq("request_id", args.requestId)
+        .eq("agent", args.agent)
+        .maybeSingle()
+    : await admin()
+        .database.from("agent_runs")
+        .select(RUN_COLUMNS)
+        .eq("workspace_id", WORKSPACE_ID)
+        .is("campaign_id", null)
+        .eq("request_id", args.requestId)
+        .eq("agent", args.agent)
+        .maybeSingle();
+  if (!existing.error && existing.data) return existing.data as AgentRun;
+
+  throw new Error(`InsForge agent run insert failed: ${errorMessage(error)}`);
 }
 
-export async function recordAgentMessage(data: Record<string, unknown>): Promise<Row> {
-  return insertRow("agent_messages", data);
+export async function finishAgentRun(args: {
+  run: AgentRun;
+  status: "succeeded" | "failed" | "cancelled";
+  output?: Record<string, unknown>;
+  executionMode?: AgentExecutionMode;
+  errorCode?: string;
+  errorDetail?: string;
+}): Promise<void> {
+  if (["succeeded", "failed", "cancelled"].includes(args.run.status)) return;
+
+  const finishedAt = new Date();
+  const startedAt = args.run.started_at ? new Date(args.run.started_at) : finishedAt;
+  const patch = {
+    status: args.status,
+    output_summary: args.output ?? null,
+    execution_mode: args.executionMode,
+    error_code: args.status === "failed" ? args.errorCode ?? "agent_failed" : null,
+    error_detail: args.status === "failed" ? (args.errorDetail ?? "Agent execution failed").slice(0, 2000) : null,
+    finished_at: finishedAt.toISOString(),
+    duration_ms: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+  };
+  const { error } = await admin().database.from("agent_runs").update(patch).eq("id", args.run.id);
+  if (!error) return;
+
+  const existing = await admin().database.from("agent_runs").select("status").eq("id", args.run.id).maybeSingle();
+  if (!existing.error && existing.data && ["succeeded", "failed", "cancelled"].includes(String(existing.data.status))) {
+    return;
+  }
+  throw new Error(`InsForge agent run update failed: ${errorMessage(error)}`);
+}
+
+export async function recordAgentMessage(args: {
+  campaignId: string;
+  agentRunId: string;
+  roomId: string;
+  senderKind: "agent" | "human" | "system";
+  agentName?: string;
+  roleLabel?: string;
+  /** Unverified caller label; there is no authenticated user identity. */
+  actorSubject?: string;
+  body: string;
+  action?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const { error } = await admin().database.from("agent_messages").insert([{
+    workspace_id: WORKSPACE_ID,
+    campaign_id: args.campaignId,
+    agent_run_id: args.agentRunId,
+    room_id: args.roomId,
+    sender_kind: args.senderKind,
+    agent_name: args.agentName ?? null,
+    role_label: args.roleLabel ?? null,
+    actor_subject: args.actorSubject ?? null,
+    body: args.body,
+    action: args.action ?? null,
+    metadata: args.metadata ?? {},
+  }]);
+  if (error) throw new Error(`InsForge agent message insert failed: ${errorMessage(error)}`);
 }

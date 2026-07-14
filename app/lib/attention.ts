@@ -38,6 +38,7 @@ function publicDir(): string {
 
 const GENERATED_BUCKET = "generated-creatives";
 const MAX_CREATIVE_BYTES = 10 * 1024 * 1024;
+const STORED_CREATIVE_KEY = /^(?:[0-9a-f-]{36}\/[0-9a-f-]{36}\/)generated\/[\w.-]+\.png$/i;
 
 /** Load local or allowlisted InsForge-hosted creative bytes without permitting SSRF. */
 export async function loadCreativePng(imageUrl: string): Promise<Buffer | null> {
@@ -55,7 +56,7 @@ export async function loadCreativePng(imageUrl: string): Promise<Buffer | null> 
     const prefix = `/api/storage/buckets/${GENERATED_BUCKET}/objects/`;
     if (url.origin !== base.origin || !url.pathname.startsWith(prefix)) return null;
     const key = decodeURIComponent(url.pathname.slice(prefix.length));
-    if (!/^generated\/[\w.-]+\.png$/.test(key)) return null;
+    if (!STORED_CREATIVE_KEY.test(key)) return null;
 
     const bytes = await downloadFile(GENERATED_BUCKET, key);
     const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

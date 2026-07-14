@@ -287,12 +287,14 @@ function InfoCard({
 // ─── Creative Panel ──────────────────────────────────────────────────────────
 
 function CreativePanel({
+  campaignId,
   board,
   brief,
   audienceProfile,
   onBack,
   onSimulate,
 }: {
+  campaignId: string;
   board: Billboard;
   brief: ProductBrief;
   audienceProfile: AudienceProfile;
@@ -301,10 +303,12 @@ function CreativePanel({
 }) {
   const [concepts, setConcepts] = useState<AdConcept[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creativeError, setCreativeError] = useState<string | null>(null);
   const [variants, setVariants] = useState([0, 0]);
   const [consistentBrand, setConsistentBrand] = useState(false);
   // VLM attention reports, keyed by the concept's imageUrl (stable per art).
   const [attention, setAttention] = useState<Record<string, AttentionReport | "loading">>({});
+  const generationRequests = useRef(new Map<string, string>());
 
   const testAttention = useCallback(
     async (concept: AdConcept) => {
@@ -338,23 +342,38 @@ function CreativePanel({
   const fetchConcepts = useCallback(
     async (variant = 0, forceLive = false) => {
       setLoading(true);
-      const endpoint = forceLive ? "/api/generate?live=1" : "/api/generate";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          billboardId: board.id,
-          brief,
-          audienceProfile,
-          consistentBrand,
-          variant,
-        }),
-      });
-      const data = await res.json();
-      setConcepts(data.concepts);
-      setLoading(false);
+      setCreativeError(null);
+      try {
+        const endpoint = forceLive ? "/api/generate?live=1" : "/api/generate";
+        const generationKey = `${board.id}:${variant}:${consistentBrand}`;
+        let requestId = generationRequests.current.get(generationKey);
+        if (!requestId) {
+          requestId = crypto.randomUUID();
+          generationRequests.current.set(generationKey, requestId);
+        }
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            campaignId,
+            requestId,
+            billboardId: board.id,
+            brief,
+            audienceProfile,
+            consistentBrand,
+            variant,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Creative generation failed");
+        setConcepts(data.concepts);
+      } catch (error) {
+        setCreativeError(error instanceof Error ? error.message : "Creative generation failed");
+      } finally {
+        setLoading(false);
+      }
     },
-    [board.id, brief, audienceProfile, consistentBrand]
+    [campaignId, board.id, brief, audienceProfile, consistentBrand]
   );
 
   useEffect(() => {
@@ -398,7 +417,11 @@ function CreativePanel({
           </label>
         </div>
 
-        {loading ? (
+        {creativeError ? (
+          <div className="rounded-lg border border-red-400/20 bg-red-400/5 p-5 text-sm text-red-200">
+            {creativeError}
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-bilads-accent border-t-transparent rounded-full animate-spin" />
           </div>
@@ -785,7 +808,9 @@ export default function ResultsPage() {
   const router = useRouter();
   const [brief, setBrief] = useState<ProductBrief | null>(null);
   const [campaign, setCampaign] = useState<CampaignParams | null>(null);
+  const [campaignId, setCampaignId] = useState<string | null>(null);
   const [research, setResearch] = useState<ResearchResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [agentPhase, setAgentPhase] = useState<0 | 1 | 2>(0);
   const [selectedBoard, setSelectedBoard] = useState<string | null>(null);
   const [creativeBoard, setCreativeBoard] = useState<Billboard | null>(null);
@@ -793,24 +818,82 @@ export default function ResultsPage() {
   const [showBand, setShowBand] = useState(false);
   const [blobsData, setBlobsData] = useState<BlobsResult | null>(null);
 
-  // Load form state and fetch research
+  // Create the durable campaign first, then run and persist research against it.
   useEffect(() => {
     const stored = sessionStorage.getItem("bilads-brief");
     if (!stored) {
       router.push("/");
       return;
     }
-    const { brief: b, campaign: c } = JSON.parse(stored);
-    setBrief(b);
-    setCampaign(c);
+    const launch = JSON.parse(stored) as {
+      brief: ProductBrief;
+      campaign: CampaignParams;
+      clientRequestId?: string;
+      researchRequestId?: string;
+      campaignId?: string;
+      research?: ResearchResponse;
+    };
+    const b = launch.brief;
+    const c = launch.campaign;
+    launch.clientRequestId ??= crypto.randomUUID();
+    launch.researchRequestId ??= crypto.randomUUID();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setBrief(b);
+        setCampaign(c);
+      }
+    });
 
-    fetch("/api/research", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: stored,
-    })
-      .then((res) => res.json())
-      .then((data: ResearchResponse) => {
+    async function load() {
+      try {
+        let durableCampaignId = launch.campaignId;
+        if (!durableCampaignId) {
+          const createdResponse = await fetch("/api/campaigns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              clientRequestId: launch.clientRequestId,
+              brief: b,
+              campaign: c,
+            }),
+          });
+          const created = await createdResponse.json();
+          if (!createdResponse.ok) throw new Error(created.error ?? "Campaign creation failed");
+          durableCampaignId = created.campaign.id as string;
+          launch.campaignId = durableCampaignId;
+          sessionStorage.setItem("bilads-brief", JSON.stringify(launch));
+        }
+        if (cancelled || !durableCampaignId) return;
+        setCampaignId(durableCampaignId);
+
+        if (launch.research) {
+          setResearch(launch.research);
+          setAgentPhase(2);
+          fetch("/api/blobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audienceProfile: launch.research.researcher.audienceProfile, brief: b }),
+          })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((blobs: BlobsResult | null) => blobs && setBlobsData(blobs))
+            .catch(() => undefined);
+          return;
+        }
+
+        const researchResponse = await fetch("/api/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            campaignId: durableCampaignId,
+            requestId: launch.researchRequestId,
+            brief: b,
+            campaign: c,
+          }),
+        });
+        const data = await researchResponse.json() as ResearchResponse & { error?: string };
+        if (!researchResponse.ok) throw new Error(data.error ?? "Research failed");
+        if (cancelled) return;
         setResearch(data);
         setAgentPhase(0);
         // Animate: researcher active for 4s, then media buyer for 4s
@@ -825,7 +908,15 @@ export default function ResultsPage() {
           .then((r) => (r.ok ? r.json() : null))
           .then((blobs: BlobsResult | null) => blobs && setBlobsData(blobs))
           .catch(() => {});
-      });
+      } catch (error) {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : "Campaign setup failed");
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Recompute rankings client-side when campaign params change
@@ -878,6 +969,19 @@ export default function ResultsPage() {
   );
 
   if (!brief || !campaign) return null;
+  if (loadError) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-lg rounded-lg border border-red-400/20 bg-bilads-surface p-6">
+          <h1 className="text-xl font-bold">Campaign setup failed</h1>
+          <p className="mt-2 text-sm text-bilads-fg/60">{loadError}</p>
+          <button onClick={() => router.push("/")} className="mt-5 text-sm text-bilads-accent hover:underline">
+            Return to the brief
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   const researcherStatus: AgentStatus =
     agentPhase >= 1 ? "complete" : agentPhase === 0 && research ? "active" : "waiting";
@@ -980,8 +1084,9 @@ export default function ResultsPage() {
             }
           />
           {/* BAND discussion */}
-          {research && agentPhase >= 2 && (
+          {research && campaignId && agentPhase >= 2 && (
             <BandDiscussion
+              campaignId={campaignId}
               brief={brief}
               research={research}
               topBoards={top3Boards}
@@ -1092,8 +1197,9 @@ export default function ResultsPage() {
       </div>
 
       {/* Creative panel overlay */}
-      {creativeBoard && research && (
+      {creativeBoard && research && campaignId && (
         <CreativePanel
+          campaignId={campaignId}
           board={creativeBoard}
           brief={brief}
           audienceProfile={research.researcher.audienceProfile}

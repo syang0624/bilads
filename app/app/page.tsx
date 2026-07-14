@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ProductBrief, CampaignParams } from "@/lib/types";
 import { SAMPLES } from "@/lib/samples";
 
@@ -80,7 +81,12 @@ export default function Home() {
     // Store form state in sessionStorage for the results page
     sessionStorage.setItem(
       "bilads-brief",
-      JSON.stringify({ brief, campaign })
+      JSON.stringify({
+        brief,
+        campaign,
+        clientRequestId: crypto.randomUUID(),
+        researchRequestId: crypto.randomUUID(),
+      })
     );
     router.push("/results");
   }, [brief, campaign, router]);
@@ -95,6 +101,9 @@ export default function Home() {
         <p className="mt-4 text-xl md:text-2xl text-bilads-fg/70 font-mono">
           Billboards, decided.
         </p>
+        <div className="mt-5 flex justify-center gap-4 text-sm">
+          <Link href="/campaigns" className="text-bilads-accent hover:underline">Saved campaigns</Link>
+        </div>
       </div>
 
       {/* Upload form */}

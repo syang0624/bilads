@@ -73,13 +73,13 @@ export async function generateMockup(input: MockupInput): Promise<MockupResult> 
 
     // generateAdImage reuses the on-disk PNG if it exists, and returns the
     // branded placeholder URL on any image-gen failure — never a broken image.
-    const imageUrl = await generateAdImage(
+    const generated = await generateAdImage(
       safePrompt(scene, input),
       cacheKey,
       0,
       input.advertiserName
     );
-    return { headline, subline, imageUrl, source: "llm" };
+    return { headline, subline, imageUrl: generated.imageUrl, source: "llm" };
   } catch {
     return {
       headline: cannedHeadline(input),

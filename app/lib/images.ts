@@ -11,6 +11,18 @@ import { uploadFile } from "./insforge";
 
 const GENERATED_BUCKET = "generated-creatives";
 
+export interface GeneratedImageResult {
+  imageUrl: string;
+  asset?: {
+    bucket: string;
+    key: string;
+    url: string;
+    mimeType: string;
+    byteSize: number;
+    sha256: string;
+  };
+}
+
 /** Branded SVG placeholder rendered by app/app/api/placeholder/route.ts. */
 export function placeholderUrl(text: string): string {
   return `/api/placeholder?w=1024&h=512&text=${encodeURIComponent(text)}`;
@@ -33,12 +45,13 @@ export async function generateAdImage(
   cacheKey: string,
   index: number,
   placeholderText: string,
-  forceRegenerate = false
-): Promise<string> {
+  forceRegenerate = false,
+  storageScope?: { workspaceId: string; campaignId: string }
+): Promise<GeneratedImageResult> {
   const filename = `${cacheKey}-${index}.png`;
   const urlPath = `/generated/${filename}`;
   const diskPath = join(generatedDir(), filename);
-  if (!forceRegenerate && existsSync(diskPath)) return urlPath;
+  if (!forceRegenerate && existsSync(diskPath)) return { imageUrl: urlPath };
   try {
     const bytes = await image(prompt);
 
@@ -46,11 +59,13 @@ export async function generateAdImage(
     try {
       const stored = await uploadFile(
         GENERATED_BUCKET,
-        `generated/${filename}`,
+        storageScope
+          ? `${storageScope.workspaceId}/${storageScope.campaignId}/generated/${filename}`
+          : `generated/${filename}`,
         bytes,
         "image/png"
       );
-      if (stored) return stored.url;
+      if (stored) return { imageUrl: stored.url, asset: stored };
     } catch (error) {
       storageError = error;
     }
@@ -63,12 +78,12 @@ export async function generateAdImage(
 
     mkdirSync(generatedDir(), { recursive: true });
     writeFileSync(diskPath, bytes);
-    return urlPath;
+    return { imageUrl: urlPath };
   } catch (error) {
     console.warn(
       `Image generation failed for ${filename}; returning a placeholder:`,
       error instanceof Error ? error.message : String(error)
     );
-    return placeholderUrl(placeholderText);
+    return { imageUrl: placeholderUrl(placeholderText) };
   }
 }

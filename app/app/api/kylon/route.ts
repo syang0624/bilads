@@ -12,9 +12,9 @@
  * POST { action: "update", id, status }       → set one assignment's status
  */
 import { NextRequest, NextResponse } from "next/server";
-import { startRoom } from "@/lib/band";
-import { insertRow } from "@/lib/insforge";
-import { requireApiKey } from "@/lib/apiAuth";
+import { randomUUID } from "node:crypto";
+import { finishAgentRun, startAgentRun } from "@/lib/insforge";
+import { authorizeMachineRequest } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 
@@ -79,8 +79,8 @@ function freshWorkspace(companyContext?: Partial<CompanyContext>): Workspace {
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const denied = requireApiKey(req);
-  if (denied) return denied;
+  const auth = await authorizeMachineRequest(req);
+  if (auth.response) return auth.response;
   if (!workspace) workspace = freshWorkspace();
   return NextResponse.json(workspace);
 }
@@ -93,8 +93,8 @@ interface KylonPost {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const denied = requireApiKey(req);
-  if (denied) return denied;
+  const auth = await authorizeMachineRequest(req);
+  if (auth.response) return auth.response;
   let body: KylonPost;
   try {
     body = (await req.json()) as KylonPost;
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (body.action === "start") {
     workspace = freshWorkspace(body.companyContext);
-    void insertRow("agent_runs", { agent: "kylon", input: "pipeline start", output: null, live: true });
+    await auditKylon("start", { assignmentCount: workspace.assignments.length });
     return NextResponse.json(workspace);
   }
 
@@ -123,16 +123,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       next.startedAt = now;
       // The approval assignment hands off to a BAND room.
       if (next.id === "kylon-5") {
-        const room = await startRoom({
-          brief: {
-            productName: "Volt",
-            description: "Premium electric commuter bike.",
-            audience: workspace.companyContext.personas.join("; "),
-          },
-        });
-        next.handoff = { bandRoomId: room.roomId };
+        next.handoff = { status: "awaiting human campaign owner in the Bilads BAND room" };
       }
     }
+    await auditKylon("advance", { current: current?.id ?? null, next: next?.id ?? null });
     return NextResponse.json(workspace);
   }
 
@@ -143,8 +137,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     a.status = body.status;
     if (body.status === "in_progress") a.startedAt = new Date().toISOString();
     if (body.status === "completed") a.completedAt = new Date().toISOString();
+    await auditKylon("update", { assignmentId: a.id, status: a.status });
     return NextResponse.json(workspace);
   }
 
   return NextResponse.json({ error: `unknown action: ${(body as { action?: string }).action}` }, { status: 400 });
+}
+
+async function auditKylon(action: string, output: Record<string, unknown>): Promise<void> {
+  const run = await startAgentRun({
+    initiatedBySubject: "kylon",
+    requestId: randomUUID(),
+    agent: "kylon-workforce",
+    model: "Kylon",
+    input: { action },
+  });
+  await finishAgentRun({ run, status: "succeeded", output });
 }

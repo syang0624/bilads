@@ -1,103 +1,143 @@
-/**
- * POST /api/research (PRD §7.2) — Researcher then Media Buyer, one response.
- *
- * Query params:
- *   ?mock=1  — contract-exact hardcoded mock (Phase 1; Steven's dev harness)
- *
- * Failure chain (app never dead-ends):
- *   live GMI agents → deterministic fallback (keyword researcher + math
- *   rankings + canned reasons). A well-formed request always gets a 200.
- */
 import { NextRequest, NextResponse } from "next/server";
 import type { ResearchRequest, ResearchResponse } from "@/lib/types";
+import { authorizeApiRequest } from "@/lib/apiAuth";
 import { loadBoards } from "@/lib/boards";
+import { getCampaign } from "@/lib/campaigns";
+import { adminDatabase, finishAgentRun, startAgentRun, WORKSPACE_SLUG } from "@/lib/insforge";
 import { runResearcher, fallbackResearcher, type ResearcherBlock } from "@/lib/researcher";
 import { runMediaBuyer } from "@/lib/mediaBuyer";
 import { scoreBoards, cannedReason } from "@/lib/scoring";
 import { buildMockResearchResponse } from "@/lib/mock";
-import { recordAgentRun } from "@/lib/insforge";
-import { requireApiKey } from "@/lib/apiAuth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const denied = requireApiKey(req);
-  if (denied) return denied;
-  if (req.nextUrl.searchParams.get("mock") === "1") {
-    return NextResponse.json(buildMockResearchResponse());
-  }
+  const auth = await authorizeApiRequest(req, { allowMachine: true });
+  if (auth.response) return auth.response;
 
   let body: ResearchRequest;
   try {
     body = (await req.json()) as ResearchRequest;
     validate(body);
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "invalid request body" },
-      { status: 400 }
-    );
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "invalid request body" }, { status: 400 });
   }
 
-  const boards = loadBoards();
-
-  // Agent 1 — Researcher (LLM, silent fallback to deterministic profile).
-  let researcher: ResearcherBlock;
-  let researcherLive = true;
+  let campaign;
   try {
-    researcher = await runResearcher(body.brief);
+    campaign = await getCampaign(body.campaignId);
   } catch {
-    researcher = fallbackResearcher(body.brief);
-    researcherLive = false;
+    return NextResponse.json({ error: "Campaign access check failed" }, { status: 500 });
+  }
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+  if (!requestMatchesCampaign(body, campaign)) {
+    return NextResponse.json({ error: "Request does not match the saved campaign" }, { status: 409 });
   }
 
-  // Agent 2 — Media Buyer (math ranks; LLM reasons with canned fallback inside).
-  let mediaBuyer: ResearchResponse["mediaBuyer"];
+  let run;
   try {
-    mediaBuyer = await runMediaBuyer(boards, researcher, body.campaign);
-  } catch {
-    const { rankings, top3 } = scoreBoards(
-      boards,
-      researcher.audienceProfile.interests,
-      body.campaign
-    );
-    const byId = new Map(boards.map((b) => [b.id, b]));
-    for (const r of rankings) {
-      r.reason = cannedReason(byId.get(r.id)!, researcher.audienceProfile.interests);
+    run = await startAgentRun({
+      campaignId: campaign.id,
+      initiatedBySubject: auth.principal.subject,
+      requestId: body.requestId,
+      agent: "researcher+media-buyer",
+      model: process.env.GMI_CHAT_MODEL,
+      input: { productName: body.brief.productName, campaign: body.campaign },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Agent run could not start" }, { status: 503 });
+  }
+
+  try {
+    let response: ResearchResponse;
+    let executionMode: "live" | "fallback" | "cache" | "mixed" = "live";
+
+    if (req.nextUrl.searchParams.get("mock") === "1") {
+      response = buildMockResearchResponse();
+      executionMode = "cache";
+    } else {
+      const boards = loadBoards();
+      let researcher: ResearcherBlock;
+      try {
+        researcher = await runResearcher(body.brief);
+      } catch {
+        researcher = fallbackResearcher(body.brief);
+        executionMode = "fallback";
+      }
+
+      let mediaBuyer: ResearchResponse["mediaBuyer"];
+      try {
+        mediaBuyer = await runMediaBuyer(boards, researcher, body.campaign);
+      } catch {
+        const { rankings, top3 } = scoreBoards(boards, researcher.audienceProfile.interests, body.campaign);
+        const byId = new Map(boards.map((board) => [board.id, board]));
+        for (const ranking of rankings) {
+          ranking.reason = cannedReason(byId.get(ranking.id)!, researcher.audienceProfile.interests);
+        }
+        mediaBuyer = {
+          rankings,
+          top3,
+          findings: [
+            `Scored all ${rankings.length} boards on audience match and impressions per dollar.`,
+            `Top pick: ${top3[0] ?? "none in budget"}.`,
+            `${rankings.filter((ranking) => ranking.inBudget).length} of ${rankings.length} boards fit the weekly budget.`,
+            "Rankings are deterministic — math decides, agents explain.",
+          ],
+        };
+        executionMode = executionMode === "fallback" ? "fallback" : "mixed";
+      }
+      response = { researcher, mediaBuyer };
     }
-    mediaBuyer = {
-      rankings,
-      top3,
-      findings: [
-        `Scored all ${rankings.length} boards on audience match and impressions per dollar.`,
-        `Top pick: ${top3[0] ?? "none in budget"}.`,
-        `${rankings.filter((r) => r.inBudget).length} of ${rankings.length} boards fit the weekly budget.`,
-        "Rankings are deterministic — math decides, agents explain.",
-      ],
-    };
+
+    const persisted = await adminDatabase().rpc("set_campaign_research", {
+      p_workspace_slug: WORKSPACE_SLUG,
+      p_campaign_id: campaign.id,
+      p_research_result: response,
+    });
+    if (persisted.error) throw new Error(`Research persistence failed: ${persisted.error.message}`);
+
+    await finishAgentRun({
+      run,
+      status: "succeeded",
+      executionMode,
+      output: { top3: response.mediaBuyer.top3 },
+    });
+    return NextResponse.json(response);
+  } catch (error) {
+    await finishAgentRun({
+      run,
+      status: "failed",
+      errorCode: "research_failed",
+      errorDetail: error instanceof Error ? error.message : String(error),
+    }).catch(() => undefined);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Research failed" }, { status: 500 });
   }
-
-  const response: ResearchResponse = { researcher, mediaBuyer };
-
-  // Fire-and-forget job-state tracking (InsForge; in-memory fallback offline).
-  void recordAgentRun({
-    agent: "researcher+media-buyer",
-    input: { productName: body.brief.productName, campaign: body.campaign },
-    live: researcherLive,
-    output: { top3: mediaBuyer.top3 },
-  });
-
-  return NextResponse.json(response);
 }
 
 function validate(body: ResearchRequest): void {
-  if (!body?.brief) throw new Error("missing brief");
+  if (typeof body?.campaignId !== "string" || !body.campaignId) throw new Error("missing campaignId");
+  if (typeof body.requestId !== "string" || !body.requestId || body.requestId.length > 128) {
+    throw new Error("requestId must be 1-128 characters");
+  }
+  if (!body.brief) throw new Error("missing brief");
   const { productName, description, audience } = body.brief;
   if (typeof productName !== "string" || !productName.trim()) throw new Error("missing brief.productName");
   if (typeof description !== "string") throw new Error("missing brief.description");
   if (typeof audience !== "string") throw new Error("missing brief.audience");
-  const c = body.campaign;
-  if (!c || typeof c.weeklyBudgetUsd !== "number") throw new Error("missing campaign.weeklyBudgetUsd");
-  if (typeof c.campaignWeeks !== "number") throw new Error("missing campaign.campaignWeeks");
-  if (typeof c.awarenessWeight !== "number" || c.awarenessWeight < 0 || c.awarenessWeight > 1)
+  const campaign = body.campaign;
+  if (!campaign || typeof campaign.weeklyBudgetUsd !== "number") throw new Error("missing campaign.weeklyBudgetUsd");
+  if (typeof campaign.campaignWeeks !== "number") throw new Error("missing campaign.campaignWeeks");
+  if (typeof campaign.awarenessWeight !== "number" || campaign.awarenessWeight < 0 || campaign.awarenessWeight > 1) {
     throw new Error("campaign.awarenessWeight must be in [0,1]");
+  }
+}
+
+function requestMatchesCampaign(body: ResearchRequest, campaign: Awaited<ReturnType<typeof getCampaign>>): boolean {
+  if (!campaign) return false;
+  return campaign.product_name === body.brief.productName.trim()
+    && campaign.product_description === body.brief.description
+    && campaign.target_audience === body.brief.audience
+    && Number(campaign.weekly_budget_usd) === body.campaign.weeklyBudgetUsd
+    && Number(campaign.campaign_weeks) === body.campaign.campaignWeeks
+    && Number(campaign.awareness_weight) === body.campaign.awarenessWeight;
 }

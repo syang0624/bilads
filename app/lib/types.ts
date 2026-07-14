@@ -77,6 +77,10 @@ export interface AudienceProfile {
  */
 
 export interface ResearchRequest {
+    /** durable InsForge campaign owned by the current user */
+    campaignId: string;
+    /** idempotency key for the agent run */
+    requestId: string;
     brief: ProductBrief;
     campaign: CampaignParams;
 }
@@ -121,6 +125,10 @@ export interface ResearchResponse {
  */
 
 export interface GenerateRequest {
+    /** durable InsForge campaign owned by the current user */
+    campaignId: string;
+    /** idempotency key for this generation */
+    requestId: string;
     billboardId: string;
     brief: ProductBrief;
     audienceProfile: AudienceProfile;
@@ -140,6 +148,15 @@ export interface AdConcept {
     subline: string;
     /** /public path or full URL to the generated ad art */
     imageUrl: string;
+    /** durable InsForge Storage metadata, present for newly rendered art */
+    asset?: {
+        bucket: string;
+        key: string;
+        url: string;
+        mimeType: string;
+        byteSize: number;
+        sha256: string;
+    };
     /** <= 15 words, why this concept for this board */
     rationale: string;
 }
@@ -473,6 +490,7 @@ export type ApprovalDecision = "approved" | "rejected" | "edited";
 /** One saved campaign — the "reopen campaign" flow reads these back. */
 export interface CampaignRecord {
     id: string;
+    workspaceId: string;
     createdAt: string; // ISO timestamp
     updatedAt: string; // ISO timestamp
     /** optional sample this was prefilled from ("volt" | "fog-city" | "ledgerly") */
