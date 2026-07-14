@@ -21,7 +21,7 @@ Godson owns all data that flows into the system: billboard records, audience tag
     `app/lib/gmi.ts` handles this.
   - Aspect ratio `2:1` is REJECTED; use `16:9` (composite warp absorbs the diff)
   - Image calls need their own timeout (45s) — 17s gen vs the 20s chat timeout
-  - Next.js only reads env from `app/` → `app/.env.local` is a symlink to root `.env`
+  - Next.js reads local environment variables from `app/.env.local`; keep that as the single local env file
 
 ---
 
